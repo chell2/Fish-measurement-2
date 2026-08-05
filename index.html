@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>魚体測定 音声入力</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f7fb;
+      color: #222;
+    }
+
+    .app {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0 0 16px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+
+    /* マイク診断用アラートスタイル */
+    .alert-card {
+      display: none; /* 初期状態は非表示 */
+      background: #fce8e6;
+      border: 1px solid #fad2cf;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      color: #c5221f;
+    }
+
+    .alert-title {
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alert-body {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .alert-body ol {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 16px;
+      padding: 10px 12px;
+      border: 1px solid #d8dde8;
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary {
+      background: #1a73e8;
+      color: #fff;
+    }
+
+    .danger {
+      background: #d93025;
+      color: #fff;
+    }
+
+    .secondary {
+      background: #e8eefb;
+      color: #1a3d7c;
+    }
+
+    .save {
+      background: #188038;
+      color: #fff;
+      width: 100%;
+      margin-top: 12px;
+      padding: 14px 18px;
+    }
+
+    .status {
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .listening {
+      color: #d93025;
+    }
+
+    .ok {
+      color: #188038;
+    }
+
+    .error {
+      color: #d93025;
+    }
+
+    .hint {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.7;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #e6e9f0;
+      padding: 8px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      font-size: 13px;
+      background: #f8fafd;
+    }
+
+    td input,
+    td select {
+      padding: 8px;
+      font-size: 15px;
+    }
+
+    .small-btn {
+      padding: 8px 10px;
+      font-size: 13px;
+      border-radius: 8px;
+    }
+
+    .invalid-row {
+      background: #fff4f4;
+    }
+
+    .empty {
+      color: #777;
+      text-align: center;
+      padding: 24px 8px;
+    }
+
+    .note {
+      font-size: 13px;
+      color: #666;
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 12px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 21px;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <h1>魚体測定 音声入力</h1>
+
+    <!-- :warning: マイク接続エラー警告カード -->
+    <div id="micAlert" class="alert-card">
+      <div class="alert-title">:warning: <span id="alertTitle">マイクが利用できません</span></div>
+      <div id="alertBody" class="alert-body">
+        マイクの設定に問題があります。以下の確認を行ってください。
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="measurementDate">測定日</label>
+          <input type="date" id="measurementDate">
+        </div>
+
+        <div>
+          <label for="measurer">測定者</label>
+          <input type="text" id="measurer" placeholder="例：三吉">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>音声入力</label>
+
+      <div class="hint">
+        話し方の例：<br>
+        「1番、体長18.5、体重72、変形なし」<br>
+        「2番、体長19.1、体重75、変形エー」<br>
+        「3番、18.8、70、ビー」<br>
+        「4番 19点0 73 シー」でも読み取りできます。
+      </div>
+
+      <div class="note">
+        ※ 変形レベルは「なし／A／B／C」のいずれかです。<br>
+        ※ A・B・Cは「エー」「ビー」「シー」とはっきり発音すると認識しやすくなります。
+      </div>
+
+      <div class="buttons">
+        <button class="primary" onclick="startListening()">マイク開始</button>
+        <button class="danger" onclick="stopListening()">マイク停止</button>
+        <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
+      </div>
+
+      <div id="status" class="status">診断中...</div>
+
+      <div style="margin-top: 12px;">
+        <label for="latestText">聞き取り結果</label>
+        <textarea id="latestText" readonly placeholder="ここに聞き取った内容が表示されます"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>測定一覧</label>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:100px;">ナンバー</th>
+              <th style="width:140px;">体長cm</th>
+              <th style="width:140px;">体重g</th>
+              <th style="width:130px;">変形レベル</th>
+              <th style="width:90px;">操作</th>
+            </tr>
+          </thead>
+
+          <tbody id="tbody">
+            <tr>
+              <td colspan="5" class="empty">まだ測定データがありません</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <button class="save" onclick="saveRows()">スプレッドシートに登録</button>
+      <div id="saveStatus" class="status"></div>
+    </div>
+  </div>
+
+  <script>
+    // ▼ ここにご自身のGASのデプロイURLを貼り付けてください ▼
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzfDqRk7xO_wIktrTdIwqeJSW4WozKtWvxdJ4NxxhEon7qre9BXM9s7BTF72yrm2G4M2w/exec';
+
+    let recognition = null;
+    let isListening = false;
+    let rows = [];
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+
+      document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
+
+      setupSpeechRecognition();
+      renderTable();
+
+      // :mag: 初期化時のマイク状態自動チェック
+      await checkMicPermission();
+    });
+
+    // マイクのアクセス権限・サポート自動判定
+    async function checkMicPermission() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      
+      // 1. ブラウザサポートチェック
+      if (!SpeechRecognition) {
+        showAlert(
+          'ブラウザが非対応です',
+          'お使いのブラウザは音声入力に対応していません。<br><strong>AndroidのChrome</strong>、または<strong>iPhoneのSafari / Chrome</strong>をご利用ください。'
+        );
+        setStatus('音声入力非対応ブラウザです。手入力をご利用ください。', 'error');
+        return;
+      }
+
+      // 2. Permission API による権限確認（対応ブラウザのみ）
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const status = await navigator.permissions.query({ name: 'microphone' });
+          if (status.state === 'denied') {
+            showMicDeniedGuide();
+            return;
+          }
+        } catch (e) {
+          // Permissions API未対応環境はスルー
+        }
+      }
+
+      // 3. MediaDevices によるデバイス接続確認
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          // 確認用ストリームを即座に解放
+          stream.getTracks().forEach(track => track.stop());
+          hideAlert();
+          setStatus('マイク準備完了。「マイク開始」を押してください。', 'ok');
+        } catch (err) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            showMicDeniedGuide();
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            showAlert(
+              'マイクが見つかりません',
+              '端末にマイクが接続されていないか、無効化されています。マイク機器や端末設定を確認してください。'
+            );
+            setStatus('マイクが見つかりません。', 'error');
+          } else {
+            showAlert(
+              'マイクの初期化エラー',
+              `マイクの準備中にエラーが発生しました (${err.message})。ページを再読み込みしてください。`
+            );
+          }
+        }
+      } else {
+        setStatus('マイクの準備完了（「マイク開始」を押してテストしてください）', '');
+      }
+    }
+
+    function showMicDeniedGuide() {
+      showAlert(
+        'マイクのアクセスがブロックされています',
+        `マイクの使用許可が得られていません。以下の手順でマイクを許可してください：
+        <ol>
+          <li>アドレスバー（画面上部のURL欄）左側にある<strong>「鍵マーク」</strong>または<strong>「設定アイコン」</strong>をタップ</li>
+          <li><strong>「権限」</strong>または<strong>「サイトの設定」</strong>を開く</li>
+          <li><strong>「マイク」</strong>を<strong>「許可」</strong>に変更</li>
+          <li>このページを再読み込み（リロード）する</li>
+        </ol>`
+      );
+      setStatus('マイクがブロックされています。設定を変更してください。', 'error');
+    }
+
+    function showAlert(title, htmlBody) {
+      document.getElementById('alertTitle').innerHTML = title;
+      document.getElementById('alertBody').innerHTML = htmlBody;
+      document.getElementById('micAlert').style.display = 'block';
+    }
+
+    function hideAlert() {
+      document.getElementById('micAlert').style.display = 'none';
+    }
+
+    function setupSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!SpeechRecognition) return;
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        hideAlert();
+        setStatus('聞き取り中です。測定値を話してください。', 'listening');
+      };
+
+      recognition.onresult = (event) => {
+        let interim = '';
+        let finalText = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+
+          if (event.results[i].isFinal) {
+            finalText += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        const displayText = finalText || interim;
+
+        if (displayText) {
+          document.getElementById('latestText').value = displayText;
+        }
+
+        if (finalText) {
+          processFinalText(finalText);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        if (event.error === 'not-allowed') {
+          showMicDeniedGuide();
+        } else if (event.error === 'no-speech') {
+          setStatus('音声が検出されませんでした。もう一度話しかけてください。', 'error');
+        } else {
+          setStatus(`音声認識エラー：${event.error}`, 'error');
+        }
+      };
+
+      recognition.onend = () => {
+        if (isListening) {
+          try {
+            recognition.start();
+          } catch (e) {
+            setStatus('音声認識が一時停止しました。もう一度マイク開始を押してください。', 'error');
+          }
+        } else {
+          setStatus('マイク停止中', '');
+        }
+      };
+    }
+
+    function startListening() {
+      if (!recognition) {
+        setupSpeechRecognition();
+      }
+
+      if (!recognition) {
+        return;
+      }
+
+      isListening = true;
+
+      try {
+        recognition.start();
+      } catch (e) {
+        setStatus('すでに聞き取り中です。', 'listening');
+      }
+    }
+
+    function stopListening() {
+      isListening = false;
+
+      if (recognition) {
+        recognition.stop();
+      }
+
+      setStatus('マイク停止中', '');
+    }
+
+    function processFinalText(text) {
+      const normalized = normalizeText(text);
+
+      const singleDeformity = checkSingleDeformity(normalized);
+      if (singleDeformity && rows.length > 0) {
+        rows[rows.length - 1].deformity = singleDeformity;
+        renderTable();
+        setStatus(`ナンバー ${rows[rows.length - 1].number} の変形レベルを「${singleDeformity}」に更新しました。`, 'ok');
+        return;
+      }
+
+      const parsedRows = parseSpeechText(normalized);
+
+      if (parsedRows.length > 0) {
+        rows.push(...parsedRows);
+        renderTable();
+        setStatus(`${parsedRows.length}件追加しました。続けて話せます。`, 'ok');
+      } else {
+        setStatus('数値を読み取れませんでした。もう一度話すか、手入力してください。', 'error');
+      }
+    }
+
+    function checkSingleDeformity(text) {
+      const clean = text.replace(/[\s。、]/g, '');
+      if (clean.match(/^(変形|レベル)?(なし|無し|無)$/)) return 'なし';
+      if (clean.match(/^(変形|レベル)?(A|エー|えー)$/i)) return 'A';
+      if (clean.match(/^(変形|レベル)?(B|ビー|びー)$/i)) return 'B';
+      if (clean.match(/^(変形|レベル)?(C|シー|しー)$/i)) return 'C';
+      return null;
+    }
+
+    function parseSpeechText(normalizedText) {
+      const chunks = normalizedText
+        .replace(/(\d+)\s*(?:番|ばん)/g, '。$1番')
+        .split(/[。！？\n]/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const parsed = [];
+
+      chunks.forEach(chunk => {
+        const row = parseOneChunk(chunk);
+        if (row) {
+          parsed.push(row);
+        }
+      });
+
+      if (parsed.length === 0) {
+        const row = parseOneChunk(normalizedText);
+        if (row) {
+          parsed.push(row);
+        }
+      }
+
+      return parsed;
+    }
+
+    function parseOneChunk(chunk) {
+      let number = null;
+      let lengthCm = null;
+      let weightG = null;
+      let deformity = '';
+
+      const numberMatch = chunk.match(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/);
+      if (numberMatch) {
+        number = numberMatch[1];
+      }
+
+      deformity = findDeformityLevel(chunk);
+
+      let bodyText = chunk
+        .replace(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/g, '')
+        .replace(/(変形|へんけい|レベル)?\s*(なし|無し|無|A|B|C|a|b|c|エー|えー|ビー|びー|シー|しー)/g, '');
+
+      const lengthMatch = bodyText.match(/(?:体長|たいちょう|長さ)\s*([0-9]+(?:\.[0-9]+)?)/);
+      if (lengthMatch) {
+        lengthCm = Number(lengthMatch[1]);
+      }
+
+      const weightMatch = bodyText.match(/(?:体重|たいじゅう|重さ)\s*([0-9]+(?:\.[0-9]+)?)/);
+      if (weightMatch) {
+        weightG = Number(weightMatch[1]);
+      }
+
+      if (lengthCm === null || weightG === null) {
+        const cleanNumsText = bodyText
+          .replace(/(\d+)\s*点\s*(\d+)/g, '$1.$2')
+          .replace(/[^0-9.]+/g, ' ')
+          .trim();
+
+        const nums = cleanNumsText.split(/\s+/).filter(s => s.match(/^[0-9]+(?:\.[0-9]+)?$/));
+
+        if (lengthCm === null && nums.length >= 1) {
+          lengthCm = Number(nums[0]);
+        }
+        if (weightG === null && nums.length >= 2) {
+          weightG = Number(nums[1]);
+        }
+      }
+
+      if (number === null) {
+        number = String(getNextNumber());
+      }
+
+      if (lengthCm === null || weightG === null || !isFinite(lengthCm) || !isFinite(weightG)) {
+        return null;
+      }
+
+      return {
+        number,
+        lengthCm,
+        weightG,
+        deformity
+      };
+    }
+
+    function normalizeText(text) {
+      return String(text || '')
+        .replace(/[０-％]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/．/g, '.')
+        .replace(/点/g, '.')
+        .replace(/センチメートル/g, '')
+        .replace(/センチ/g, '')
+        .replace(/cm/gi, '')
+        .replace(/グラム/g, '')
+        .replace(/g/gi, '')
+        .replace(/、/g, ' ')
+        .replace(/,/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function findDeformityLevel(text) {
+      const compact = String(text || '').replace(/\s+/g, '');
+
+      if (compact.match(/変形なし|異常なし|問題なし|なし|無し|無/)) {
+        return 'なし';
+      }
+      if (compact.match(/(変形|レベル)?(A|エー|えー)/i)) {
+        return 'A';
+      }
+      if (compact.match(/(変形|レベル)?(B|ビー|びー)/i)) {
+        return 'B';
+      }
+      if (compact.match(/(変形|レベル)?(C|シー|しー)/i)) {
+        return 'C';
+      }
+
+      return '';
+    }
+
+    function getNextNumber() {
+      if (rows.length === 0) {
+        return 1;
+      }
+
+      const maxNumber = rows.reduce((max, row) => {
+        const n = Number(row.number);
+        return isFinite(n) && n > max ? n : max;
+      }, 0);
+
+      return maxNumber + 1;
+    }
+
+    function addManualRow() {
+      rows.push({
+        number: String(getNextNumber()),
+        lengthCm: '',
+        weightG: '',
+        deformity: ''
+      });
+
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tbody');
+
+      if (rows.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="empty">まだ測定データがありません</td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = rows.map((row, index) => {
+        const invalid = !isValidRow(row);
+
+        return `
+          <tr class="${invalid ? 'invalid-row' : ''}">
+            <td>
+              <input type="text" value="${escapeHtml(row.number)}" onchange="updateRow(${index}, 'number', this.value)">
+            </td>
+
+            <td>
+              <input type="number" step="0.1" value="${escapeHtml(row.lengthCm)}" onchange="updateRow(${index}, 'lengthCm', this.value)">
+            </td>
+
+            <td>
+              <input type="number" step="0.1" value="${escapeHtml(row.weightG)}" onchange="updateRow(${index}, 'weightG', this.value)">
+            </td>
+
+            <td>
+              <select onchange="updateRow(${index}, 'deformity', this.value)">
+                <option value="" ${row.deformity === '' ? 'selected' : ''}>選択</option>
+                <option value="なし" ${row.deformity === 'なし' ? 'selected' : ''}>なし</option>
+                <option value="A" ${row.deformity === 'A' ? 'selected' : ''}>A</option>
+                <option value="B" ${row.deformity === 'B' ? 'selected' : ''}>B</option>
+                <option value="C" ${row.deformity === 'C' ? 'selected' : ''}>C</option>
+              </select>
+            </td>
+
+            <td>
+              <button class="danger small-btn" onclick="deleteRow(${index})">削除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function updateRow(index, key, value) {
+      rows[index][key] = value;
+      renderTable();
+    }
+
+    function deleteRow(index) {
+      rows.splice(index, 1);
+      renderTable();
+    }
+
+    function isValidRow(row) {
+      const deformity = String(row.deformity || '').trim();
+
+      return String(row.number || '').trim() !== '' &&
+        isFinite(Number(row.lengthCm)) &&
+        isFinite(Number(row.weightG)) &&
+        Number(row.lengthCm) > 0 &&
+        Number(row.weightG) > 0 &&
+        ['なし', 'A', 'B', 'C'].includes(deformity);
+    }
+
+    async function saveRows() {
+      const measurementDate = document.getElementById('measurementDate').value;
+      const measurer = document.getElementById('measurer').value.trim();
+
+      if (!measurementDate) {
+        setSaveStatus('測定日を入力してください。', 'error');
+        return;
+      }
+
+      if (!measurer) {
+        setSaveStatus('測定者を入力してください。', 'error');
+        return;
+      }
+
+      if (rows.length === 0) {
+        setSaveStatus('登録する測定データがありません。', 'error');
+        return;
+      }
+
+      const invalidRows = rows.filter(row => !isValidRow(row));
+
+      if (invalidRows.length > 0) {
+        setSaveStatus('未入力または不正な行があります。赤い行を修正してください。変形レベルは「なし／A／B／C」のどれかです。', 'error');
+        return;
+      }
+
+      if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes('YOUR_DEPLOY_ID')) {
+        setSaveStatus('GASのWebアプリURLが設定されていません。コード内のURLを確認してください。', 'error');
+        return;
+      }
+
+      const payload = {
+        measurementDate,
+        measurer,
+        rows: rows.map(row => ({
+          number: String(row.number).trim(),
+          lengthCm: Number(row.lengthCm),
+          weightG: Number(row.weightG),
+          deformity: String(row.deformity).trim()
+        }))
+      };
+
+      setSaveStatus('保存中です...', '');
+
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const resData = await response.json();
+
+        if (resData.ok) {
+          setSaveStatus(`${resData.count}件登録しました。`, 'ok');
+          rows = [];
+          renderTable();
+          document.getElementById('latestText').value = '';
+        } else {
+          setSaveStatus(`保存できませんでした：${resData.error}`, 'error');
+        }
+      } catch (e) {
+        setSaveStatus(`通信エラーが発生しました：${e.message}`, 'error');
+      }
+    }
+
+    function setStatus(message, type) {
+      const el = document.getElementById('status');
+      el.textContent = message;
+      el.className = `status ${type || ''}`;
+    }
+
+    function setSaveStatus(message, type) {
+      const el = document.getElementById('saveStatus');
+      el.textContent = message;
+      el.className = `status ${type || ''}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
