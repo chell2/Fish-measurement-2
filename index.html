@@ -34,7 +34,7 @@
 
     /* マイク診断用アラートスタイル */
     .alert-card {
-      display: none; /* 初期状態は非表示 */
+      display: none;
       background: #fce8e6;
       border: 1px solid #fad2cf;
       border-radius: 16px;
@@ -230,9 +230,9 @@
   <div class="app">
     <h1>魚体測定 音声入力</h1>
 
-    <!-- :warning: マイク接続エラー警告カード -->
+    <!-- ⚠️ マイクエラー警告カード -->
     <div id="micAlert" class="alert-card">
-      <div class="alert-title">:warning: <span id="alertTitle">マイクが利用できません</span></div>
+      <div class="alert-title">⚠️ <span id="alertTitle">マイクが利用できません</span></div>
       <div id="alertBody" class="alert-body">
         マイクの設定に問題があります。以下の確認を行ってください。
       </div>
@@ -274,7 +274,7 @@
         <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
       </div>
 
-      <div id="status" class="status">診断中...</div>
+      <div id="status" class="status">待機中（「マイク開始」を押してください）</div>
 
       <div style="margin-top: 12px;">
         <label for="latestText">聞き取り結果</label>
@@ -312,13 +312,13 @@
 
   <script>
     // ▼ ここにご自身のGASのデプロイURLを貼り付けてください ▼
-    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzfDqRk7xO_wIktrTdIwqeJSW4WozKtWvxdJ4NxxhEon7qre9BXM9s7BTF72yrm2G4M2w/exec';
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/YOUR_DEPLOY_ID/exec';
 
     let recognition = null;
     let isListening = false;
     let rows = [];
 
-    window.addEventListener('DOMContentLoaded', async () => {
+    window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -326,91 +326,52 @@
 
       document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
 
-      setupSpeechRecognition();
       renderTable();
-
-      // :mag: 初期化時のマイク状態自動チェック
-      await checkMicPermission();
     });
 
-    // マイクのアクセス権限・サポート自動判定
-    async function checkMicPermission() {
+    async function startListening() {
+      hideAlert();
+
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      
-      // 1. ブラウザサポートチェック
+
       if (!SpeechRecognition) {
         showAlert(
           'ブラウザが非対応です',
           'お使いのブラウザは音声入力に対応していません。<br><strong>AndroidのChrome</strong>、または<strong>iPhoneのSafari / Chrome</strong>をご利用ください。'
         );
-        setStatus('音声入力非対応ブラウザです。手入力をご利用ください。', 'error');
+        setStatus('音声入力非対応ブラウザです。', 'error');
         return;
       }
 
-      // 2. Permission API による権限確認（対応ブラウザのみ）
-      if (navigator.permissions && navigator.permissions.query) {
-        try {
-          const status = await navigator.permissions.query({ name: 'microphone' });
-          if (status.state === 'denied') {
-            showMicDeniedGuide();
-            return;
-          }
-        } catch (e) {
-          // Permissions API未対応環境はスルー
-        }
-      }
-
-      // 3. MediaDevices によるデバイス接続確認
+      // ユーザーのタップ後にマイクアクセス要求（Safari/Chromeの自動ブロック回避）
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          // 確認用ストリームを即座に解放
-          stream.getTracks().forEach(track => track.stop());
-          hideAlert();
-          setStatus('マイク準備完了。「マイク開始」を押してください。', 'ok');
+          stream.getTracks().forEach(track => track.stop()); // チェック用ストリームを閉じる
         } catch (err) {
           if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
             showMicDeniedGuide();
-          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-            showAlert(
-              'マイクが見つかりません',
-              '端末にマイクが接続されていないか、無効化されています。マイク機器や端末設定を確認してください。'
-            );
-            setStatus('マイクが見つかりません。', 'error');
           } else {
-            showAlert(
-              'マイクの初期化エラー',
-              `マイクの準備中にエラーが発生しました (${err.message})。ページを再読み込みしてください。`
-            );
+            showAlert('マイクエラー', `マイクが取得できませんでした: ${err.message}`);
           }
+          setStatus('マイクが許可されていません。', 'error');
+          return;
         }
-      } else {
-        setStatus('マイクの準備完了（「マイク開始」を押してテストしてください）', '');
       }
-    }
 
-    function showMicDeniedGuide() {
-      showAlert(
-        'マイクのアクセスがブロックされています',
-        `マイクの使用許可が得られていません。以下の手順でマイクを許可してください：
-        <ol>
-          <li>アドレスバー（画面上部のURL欄）左側にある<strong>「鍵マーク」</strong>または<strong>「設定アイコン」</strong>をタップ</li>
-          <li><strong>「権限」</strong>または<strong>「サイトの設定」</strong>を開く</li>
-          <li><strong>「マイク」</strong>を<strong>「許可」</strong>に変更</li>
-          <li>このページを再読み込み（リロード）する</li>
-        </ol>`
-      );
-      setStatus('マイクがブロックされています。設定を変更してください。', 'error');
-    }
+      if (!recognition) {
+        setupSpeechRecognition();
+      }
 
-    function showAlert(title, htmlBody) {
-      document.getElementById('alertTitle').innerHTML = title;
-      document.getElementById('alertBody').innerHTML = htmlBody;
-      document.getElementById('micAlert').style.display = 'block';
-    }
+      if (!recognition) return;
 
-    function hideAlert() {
-      document.getElementById('micAlert').style.display = 'none';
+      isListening = true;
+
+      try {
+        recognition.start();
+      } catch (e) {
+        setStatus('すでに聞き取り中です。', 'listening');
+      }
     }
 
     function setupSpeechRecognition() {
@@ -476,24 +437,6 @@
       };
     }
 
-    function startListening() {
-      if (!recognition) {
-        setupSpeechRecognition();
-      }
-
-      if (!recognition) {
-        return;
-      }
-
-      isListening = true;
-
-      try {
-        recognition.start();
-      } catch (e) {
-        setStatus('すでに聞き取り中です。', 'listening');
-      }
-    }
-
     function stopListening() {
       isListening = false;
 
@@ -502,6 +445,29 @@
       }
 
       setStatus('マイク停止中', '');
+    }
+
+    function showMicDeniedGuide() {
+      showAlert(
+        'マイクのアクセスがブロックされています',
+        `マイクの使用許可が得られていません。以下の手順でマイクを許可してください：
+        <ol>
+          <li>アドレスバー（画面上部のURL欄）左側にある<strong>「鍵マーク」</strong>または<strong>「設定アイコン」</strong>をタップ</li>
+          <li><strong>「権限」</strong>または<strong>「サイトの設定」</strong>を開く</li>
+          <li><strong>「マイク」</strong>を<strong>「許可」</strong>に変更</li>
+          <li>このページを再読み込み（リロード）する</li>
+        </ol>`
+      );
+    }
+
+    function showAlert(title, htmlBody) {
+      document.getElementById('alertTitle').innerHTML = title;
+      document.getElementById('alertBody').innerHTML = htmlBody;
+      document.getElementById('micAlert').style.display = 'block';
+    }
+
+    function hideAlert() {
+      document.getElementById('micAlert').style.display = 'none';
     }
 
     function processFinalText(text) {
