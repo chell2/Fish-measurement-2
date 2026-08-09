@@ -224,13 +224,20 @@
         「11センチ 18グラム 形態異常C」
       </div>
 
+      <!-- 隠しファイル入力要素 -->
+      <input type="file" id="audioFileInput" accept="audio/*" style="display: none;" onchange="handleAudioFile(this)">
+
       <div class="buttons">
         <button class="secondary" onclick="checkMicrophoneAccess()">マイク接続テスト</button>
         <button class="primary" onclick="startListening()">マイク開始</button>
         <button class="danger" onclick="stopListening()">マイク停止</button>
+        <!-- ▼ 録音ファイル読み込みボタンを追加 ▼ -->
+        <button class="secondary" onclick="document.getElementById('audioFileInput').click()">録音ファイルから読み込み</button>
         <button class="secondary" onclick="processBufferedText()">確定して解析</button>
         <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
       </div>
+      <!-- 再生用オーディオ要素 -->
+      <audio id="audioPlayer" style="display: none;"></audio>
 
       <div id="status" class="status">待機中</div>
 
@@ -302,6 +309,44 @@
       renderTable();
       checkMicrophoneAccess(true); // 起動時にマイク事前チェック（警告を出さないサイレント確認）
     });
+
+    // 録音ファイルが選択された時の処理
+    async function handleAudioFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const audioPlayer = document.getElementById('audioPlayer');
+      audioPlayer.src = URL.createObjectURL(file);
+
+      setStatus(`ファイル「${file.name}」を読み込みました。解析を開始します...`, 'listening');
+
+      // 音声認識の準備
+      if (!recognition) {
+        setupSpeechRecognition();
+      }
+
+      try {
+        // 蓄積テキストの初期化
+        accumulatedText = '';
+        document.getElementById('latestText').value = '';
+
+        // マイク/音声認識を開始してオーディオを再生
+        isListening = true;
+        recognition.start();
+        await audioPlayer.play();
+
+        // 音声再生が終わったら自動停止して解析
+        audioPlayer.onended = () => {
+          stopListening();
+          setStatus('録音ファイルの再生・聞き取りが完了しました。', 'ok');
+          // ファイル選択をリセット
+          input.value = '';
+        };
+
+      } catch (e) {
+        setStatus(`ファイル再生エラー: ${e.message}`, 'error');
+      }
+    }
 
     // マイク接続確認機能
     async function checkMicrophoneAccess(silent = false) {
