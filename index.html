@@ -32,36 +32,6 @@
       box-shadow: 0 4px 16px rgba(0,0,0,0.06);
     }
 
-    /* マイク診断用アラートスタイル */
-    .alert-card {
-      display: none;
-      background: #fce8e6;
-      border: 1px solid #fad2cf;
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 16px;
-      color: #c5221f;
-    }
-
-    .alert-title {
-      font-weight: bold;
-      font-size: 16px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .alert-body {
-      font-size: 14px;
-      line-height: 1.6;
-    }
-
-    .alert-body ol {
-      margin: 6px 0 0;
-      padding-left: 20px;
-    }
-
     label {
       display: block;
       font-size: 14px;
@@ -82,7 +52,7 @@
     }
 
     textarea {
-      min-height: 72px;
+      min-height: 90px;
       resize: vertical;
     }
 
@@ -230,14 +200,6 @@
   <div class="app">
     <h1>魚体測定 音声入力</h1>
 
-    <!-- ⚠️ マイクエラー警告カード -->
-    <div id="micAlert" class="alert-card">
-      <div class="alert-title">⚠️ <span id="alertTitle">マイクが利用できません</span></div>
-      <div id="alertBody" class="alert-body">
-        マイクの設定に問題があります。以下の確認を行ってください。
-      </div>
-    </div>
-
     <div class="card">
       <div class="grid">
         <div>
@@ -257,28 +219,24 @@
 
       <div class="hint">
         話し方の例：<br>
-        「1番、体長18.5、体重72、変形なし」<br>
-        「2番、体長19.1、体重75、変形エー」<br>
-        「3番、18.8、70、ビー」<br>
-        「4番 19点0 73 シー」でも読み取りできます。
-      </div>
-
-      <div class="note">
-        ※ 変形レベルは「なし／A／B／C」のいずれかです。<br>
-        ※ A・B・Cは「エー」「ビー」「シー」とはっきり発音すると認識しやすくなります。
+        「10番 13センチ 27グラム」<br>
+        「13センチ 36グラム 形態異常B」<br>
+        「11センチ 18グラム 形態異常C」
       </div>
 
       <div class="buttons">
+        <button class="secondary" onclick="checkMicrophoneAccess()">マイク接続テスト</button>
         <button class="primary" onclick="startListening()">マイク開始</button>
         <button class="danger" onclick="stopListening()">マイク停止</button>
+        <button class="secondary" onclick="processBufferedText()">確定して解析</button>
         <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
       </div>
 
-      <div id="status" class="status">待機中（「マイク開始」を押してください）</div>
+      <div id="status" class="status">待機中</div>
 
       <div style="margin-top: 12px;">
-        <label for="latestText">聞き取り結果</label>
-        <textarea id="latestText" readonly placeholder="ここに聞き取った内容が表示されます"></textarea>
+        <label for="latestText">聞き取り結果（リアルタイム蓄積）</label>
+        <textarea id="latestText" placeholder="ここに聞き取った内容が表示されます。音声停止時または数秒の沈黙で自動的に測定一覧に展開されます。"></textarea>
       </div>
     </div>
 
@@ -311,13 +269,28 @@
   </div>
 
   <script>
-    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzah9jq8voPqgCVqXZJbkkK7WonimGMaQgFEI0S4r2rj_KtyPUe4MFe_qLidtmMJYeQTA/exec';
+    // ==========================================
+    // 1. 設定用定数（ここを書き換えてください）
+    // ==========================================
+    /** GASのWebアプリURL */
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzoaUgf3om8gRnXOXOxpA1ZfoUaiygsriozMvjVaxnGcd7QhGLtp-7N25OFtexV0FeFlQ/exec';
 
+
+    // ==========================================
+    // 2. アプリのメイン処理
+    // ==========================================
     let recognition = null;
     let isListening = false;
     let rows = [];
+    let accumulatedText = '';
+    let silenceTimer = null;
 
     window.addEventListener('DOMContentLoaded', () => {
+      // URLの設定チェック
+      if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes('YOUR_DEPLOY_ID')) {
+        setStatus('GASのURLが設定されていません。<script>冒頭のGAS_WEB_APP_URLを設定してください。', 'error');
+      }
+
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -325,44 +298,103 @@
 
       document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
 
+      setupSpeechRecognition();
       renderTable();
+      checkMicrophoneAccess(true); // 起動時にマイク事前チェック（警告を出さないサイレント確認）
     });
 
-    async function startListening() {
-      hideAlert();
+    // マイク接続確認機能
+    async function checkMicrophoneAccess(silent = false) {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (!silent) setStatus('このブラウザはマイクデバイスの検出に対応していません。', 'error');
+        return false;
+      }
 
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        if (!silent) setStatus('マイクが正常に認識されています。利用可能です。', 'ok');
+        return true;
+      } catch (err) {
+        if (!silent) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            setStatus('マイクへのアクセス権限が拒否されています。ブラウザの設定でマイクを許可してください。', 'error');
+          } else {
+            setStatus(`マイク接続エラー: ${err.message}`, 'error');
+          }
+        }
+        return false;
+      }
+    }
+
+    function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
       if (!SpeechRecognition) {
-        showAlert(
-          'ブラウザが非対応です',
-          'お使いのブラウザは音声入力に対応していません。<br><strong>AndroidのChrome</strong>、または<strong>iPhoneのSafari / Chrome</strong>をご利用ください。'
-        );
-        setStatus('音声入力非対応ブラウザです。', 'error');
+        setStatus('このブラウザは音声入力に対応していません。ChromeまたはiOS Safariを利用してください。', 'error');
         return;
       }
 
-      // ユーザーのタップ後にマイクアクセス要求（Safari/Chromeの自動ブロック回避）
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach(track => track.stop()); // チェック用ストリームを閉じる
-        } catch (err) {
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            showMicDeniedGuide();
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setStatus('聞き取り中です。測定値を話してください...', 'listening');
+      };
+
+      recognition.onresult = (event) => {
+        let interim = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+
+          if (event.results[i].isFinal) {
+            accumulatedText += ' ' + transcript;
           } else {
-            showAlert('マイクエラー', `マイクが取得できませんでした: ${err.message}`);
+            interim += transcript;
           }
-          setStatus('マイクが許可されていません。', 'error');
-          return;
         }
-      }
+
+        const displayText = (accumulatedText + ' ' + interim).trim();
+        document.getElementById('latestText').value = displayText;
+
+        // 音声入力が少し途切れたら（2.5秒間無音なら）自動的に解析処理を実行
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          if (accumulatedText.trim().length > 0) {
+            processBufferedText();
+          }
+        }, 2500);
+      };
+
+      recognition.onerror = (event) => {
+        if (event.error !== 'no-speech') {
+          setStatus(`音声認識エラー：${event.error}`, 'error');
+        }
+      };
+
+      recognition.onend = () => {
+        if (isListening) {
+          try {
+            recognition.start();
+          } catch (e) {
+            // 再スタート保護
+          }
+        } else {
+          setStatus('マイク停止中', '');
+        }
+      };
+    }
+
+    async function startListening() {
+      const micOk = await checkMicrophoneAccess(false);
+      if (!micOk) return;
 
       if (!recognition) {
         setupSpeechRecognition();
       }
-
-      if (!recognition) return;
 
       isListening = true;
 
@@ -373,231 +405,100 @@
       }
     }
 
-    function setupSpeechRecognition() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-      if (!SpeechRecognition) return;
-
-      recognition = new SpeechRecognition();
-      recognition.lang = 'ja-JP';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      recognition.onstart = () => {
-        hideAlert();
-        setStatus('聞き取り中です。測定値を話してください。', 'listening');
-      };
-
-      recognition.onresult = (event) => {
-        let interim = '';
-        let finalText = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-
-          if (event.results[i].isFinal) {
-            finalText += transcript;
-          } else {
-            interim += transcript;
-          }
-        }
-
-        const displayText = finalText || interim;
-
-        if (displayText) {
-          document.getElementById('latestText').value = displayText;
-        }
-
-        if (finalText) {
-          processFinalText(finalText);
-        }
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error === 'not-allowed') {
-          showMicDeniedGuide();
-        } else if (event.error === 'no-speech') {
-          setStatus('音声が検出されませんでした。もう一度話しかけてください。', 'error');
-        } else {
-          setStatus(`音声認識エラー：${event.error}`, 'error');
-        }
-      };
-
-      recognition.onend = () => {
-        if (isListening) {
-          try {
-            recognition.start();
-          } catch (e) {
-            setStatus('音声認識が一時停止しました。もう一度マイク開始を押してください。', 'error');
-          }
-        } else {
-          setStatus('マイク停止中', '');
-        }
-      };
-    }
-
     function stopListening() {
       isListening = false;
+      clearTimeout(silenceTimer);
 
       if (recognition) {
         recognition.stop();
       }
 
-      setStatus('マイク停止中', '');
+      processBufferedText();
     }
 
-    function showMicDeniedGuide() {
-      showAlert(
-        'マイクのアクセスがブロックされています',
-        `マイクの使用許可が得られていません。以下の手順でマイクを許可してください：
-        <ol>
-          <li>アドレスバー（画面上部のURL欄）左側にある<strong>「鍵マーク」</strong>または<strong>「設定アイコン」</strong>をタップ</li>
-          <li><strong>「権限」</strong>または<strong>「サイトの設定」</strong>を開く</li>
-          <li><strong>「マイク」</strong>を<strong>「許可」</strong>に変更</li>
-          <li>このページを再読み込み（リロード）する</li>
-        </ol>`
-      );
-    }
+    // 蓄積テキストをテーブル行へ展開・解析
+    function processBufferedText() {
+      const textToProcess = accumulatedText.trim() || document.getElementById('latestText').value.trim();
+      if (!textToProcess) return;
 
-    function showAlert(title, htmlBody) {
-      document.getElementById('alertTitle').innerHTML = title;
-      document.getElementById('alertBody').innerHTML = htmlBody;
-      document.getElementById('micAlert').style.display = 'block';
-    }
-
-    function hideAlert() {
-      document.getElementById('micAlert').style.display = 'none';
-    }
-
-    function processFinalText(text) {
-      const normalized = normalizeText(text);
-
-      const singleDeformity = checkSingleDeformity(normalized);
-      if (singleDeformity && rows.length > 0) {
-        rows[rows.length - 1].deformity = singleDeformity;
-        renderTable();
-        setStatus(`ナンバー ${rows[rows.length - 1].number} の変形レベルを「${singleDeformity}」に更新しました。`, 'ok');
-        return;
-      }
-
-      const parsedRows = parseSpeechText(normalized);
+      const parsedRows = parseSpeechText(textToProcess);
 
       if (parsedRows.length > 0) {
         rows.push(...parsedRows);
         renderTable();
-        setStatus(`${parsedRows.length}件追加しました。続けて話せます。`, 'ok');
+        setStatus(`${parsedRows.length}件のデータを追加しました。`, 'ok');
+        
+        accumulatedText = '';
+        document.getElementById('latestText').value = '';
       } else {
-        setStatus('数値を読み取れませんでした。もう一度話すか、手入力してください。', 'error');
+        setStatus('測定数値をうまく読み取れませんでした。手動で修正・入力してください。', 'error');
       }
     }
 
-    function checkSingleDeformity(text) {
-      const clean = text.replace(/[\s。、]/g, '');
-      if (clean.match(/^(変形|レベル)?(なし|無し|無)$/)) return 'なし';
-      if (clean.match(/^(変形|レベル)?(A|エー|えー)$/i)) return 'A';
-      if (clean.match(/^(変形|レベル)?(B|ビー|びー)$/i)) return 'B';
-      if (clean.match(/^(変形|レベル)?(C|シー|しー)$/i)) return 'C';
-      return null;
-    }
+    // 高精度テキスト解析ロジック
+    function parseSpeechText(text) {
+      const normalized = normalizeText(text);
 
-    function parseSpeechText(normalizedText) {
-      const chunks = normalizedText
-        .replace(/(\d+)\s*(?:番|ばん)/g, '。$1番')
-        .split(/[。！？\n]/)
+      let rawChunks = normalized
+        .replace(/(\d+)\s*(?:番|ばん)/g, '\n$1番 ')
+        .split(/[\n。！？]/)
         .map(s => s.trim())
         .filter(Boolean);
 
       const parsed = [];
 
-      chunks.forEach(chunk => {
-        const row = parseOneChunk(chunk);
-        if (row) {
-          parsed.push(row);
+      rawChunks.forEach(chunk => {
+        const parsedRows = parseOneChunk(chunk);
+        if (parsedRows && parsedRows.length > 0) {
+          parsed.push(...parsedRows);
         }
       });
-
-      if (parsed.length === 0) {
-        const row = parseOneChunk(normalizedText);
-        if (row) {
-          parsed.push(row);
-        }
-      }
 
       return parsed;
     }
 
     function parseOneChunk(chunk) {
       let number = null;
-      let lengthCm = null;
-      let weightG = null;
-      let deformity = '';
-
+      
       const numberMatch = chunk.match(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/);
       if (numberMatch) {
         number = numberMatch[1];
       }
 
-      deformity = findDeformityLevel(chunk);
+      let bodyText = chunk.replace(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/g, '').trim();
 
-      let bodyText = chunk
-        .replace(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/g, '')
-        .replace(/(変形|へんけい|レベル)?\s*(なし|無し|無|A|B|C|a|b|c|エー|えー|ビー|びー|シー|しー)/g, '');
+      const nums = bodyText.match(/[0-9]+(?:\.[0-9]+)?/g) || [];
+      if (nums.length < 2) return null;
 
-      const lengthMatch = bodyText.match(/(?:体長|たいちょう|長さ)\s*([0-9]+(?:\.[0-9]+)?)/);
-      if (lengthMatch) {
-        lengthCm = Number(lengthMatch[1]);
-      }
+      let deformity = findDeformityLevel(bodyText);
 
-      const weightMatch = bodyText.match(/(?:体重|たいじゅう|重さ)\s*([0-9]+(?:\.[0-9]+)?)/);
-      if (weightMatch) {
-        weightG = Number(weightMatch[1]);
-      }
+      const results = [];
+      
+      for (let i = 0; i < nums.length - 1; i += 2) {
+        const lengthCm = Number(nums[i]);
+        const weightG = Number(nums[i + 1]);
 
-      if (lengthCm === null || weightG === null) {
-        const cleanNumsText = bodyText
-          .replace(/(\d+)\s*点\s*(\d+)/g, '$1.$2')
-          .replace(/[^0-9.]+/g, ' ')
-          .trim();
-
-        const nums = cleanNumsText.split(/\s+/).filter(s => s.match(/^[0-9]+(?:\.[0-9]+)?$/));
-
-        if (lengthCm === null && nums.length >= 1) {
-          lengthCm = Number(nums[0]);
-        }
-        if (weightG === null && nums.length >= 2) {
-          weightG = Number(nums[1]);
+        if (isFinite(lengthCm) && isFinite(weightG)) {
+          results.push({
+            number: number || String(getNextNumber() + results.length),
+            lengthCm,
+            weightG,
+            deformity: deformity || 'なし'
+          });
         }
       }
 
-      if (number === null) {
-        number = String(getNextNumber());
-      }
-
-      if (lengthCm === null || weightG === null || !isFinite(lengthCm) || !isFinite(weightG)) {
-        return null;
-      }
-
-      return {
-        number,
-        lengthCm,
-        weightG,
-        deformity
-      };
+      return results;
     }
 
     function normalizeText(text) {
       return String(text || '')
-        .replace(/[０-％]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
         .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
         .replace(/．/g, '.')
         .replace(/点/g, '.')
-        .replace(/センチメートル/g, '')
-        .replace(/センチ/g, '')
-        .replace(/cm/gi, '')
-        .replace(/グラム/g, '')
-        .replace(/g/gi, '')
-        .replace(/、/g, ' ')
-        .replace(/,/g, ' ')
+        .replace(/センチメートル|センチ|cm/gi, '')
+        .replace(/グラム|g/gi, '')
         .replace(/\s+/g, ' ')
         .trim();
     }
@@ -605,26 +506,16 @@
     function findDeformityLevel(text) {
       const compact = String(text || '').replace(/\s+/g, '');
 
-      if (compact.match(/変形なし|異常なし|問題なし|なし|無し|無/)) {
-        return 'なし';
-      }
-      if (compact.match(/(変形|レベル)?(A|エー|えー)/i)) {
-        return 'A';
-      }
-      if (compact.match(/(変形|レベル)?(B|ビー|びー)/i)) {
-        return 'B';
-      }
-      if (compact.match(/(変形|レベル)?(C|シー|しー)/i)) {
-        return 'C';
-      }
+      if (compact.match(/形態異常C|変形C|レベルC|シー|しー/)) return 'C';
+      if (compact.match(/形態異常B|変形B|レベルB|ビー|びー/)) return 'B';
+      if (compact.match(/形態異常A|変形A|レベルA|エー|えー/)) return 'A';
+      if (compact.match(/変形なし|異常なし|問題なし|なし|無し/)) return 'なし';
 
       return '';
     }
 
     function getNextNumber() {
-      if (rows.length === 0) {
-        return 1;
-      }
+      if (rows.length === 0) return 1;
 
       const maxNumber = rows.reduce((max, row) => {
         const n = Number(row.number);
@@ -639,7 +530,7 @@
         number: String(getNextNumber()),
         lengthCm: '',
         weightG: '',
-        deformity: ''
+        deformity: 'なし'
       });
 
       renderTable();
@@ -676,7 +567,6 @@
 
             <td>
               <select onchange="updateRow(${index}, 'deformity', this.value)">
-                <option value="" ${row.deformity === '' ? 'selected' : ''}>選択</option>
                 <option value="なし" ${row.deformity === 'なし' ? 'selected' : ''}>なし</option>
                 <option value="A" ${row.deformity === 'A' ? 'selected' : ''}>A</option>
                 <option value="B" ${row.deformity === 'B' ? 'selected' : ''}>B</option>
@@ -735,7 +625,7 @@
       const invalidRows = rows.filter(row => !isValidRow(row));
 
       if (invalidRows.length > 0) {
-        setSaveStatus('未入力または不正な行があります。赤い行を修正してください。変形レベルは「なし／A／B／C」のどれかです。', 'error');
+        setSaveStatus('未入力または不正な行があります。赤い行を修正してください。', 'error');
         return;
       }
 
@@ -773,6 +663,7 @@
           rows = [];
           renderTable();
           document.getElementById('latestText').value = '';
+          accumulatedText = '';
         } else {
           setSaveStatus(`保存できませんでした：${resData.error}`, 'error');
         }
