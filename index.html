@@ -216,6 +216,7 @@
         <button class="secondary" onclick="runMicTest()">🎙️ マイク音量テスト</button>
         <button class="primary" onclick="startListening()">マイク開始</button>
         <button class="danger" onclick="stopListening()">マイク停止</button>
+        <button class="secondary" onclick="processTextToTable()">📝 テキストから表に反映</button>
         <button class="secondary" onclick="document.getElementById('audioFileInput').click()">📁 録音ファイルを解析</button>
         <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
       </div>
@@ -235,7 +236,7 @@
 
       <div style="margin-top: 12px;">
         <label for="latestText">テキスト化結果</label>
-        <textarea id="latestText" placeholder="ここに解析結果が表示されます。"></textarea>
+        <textarea id="latestText" placeholder="ここに解析結果が表示されます。話し終えると自動的に表へ反映されます。"></textarea>
       </div>
     </div>
 
@@ -280,6 +281,7 @@
     let recognition = null;
     let isListening = false;
     let rows = [];
+    let silenceTimer = null;
 
     // 音量計算用オブジェクト
     let audioCtx = null;
@@ -302,7 +304,7 @@
       setupSpeechRecognition();
     });
 
-    // --- 音量メーター処理（競合を防ぐため独立動作） ---
+    // --- 音量メーター処理 ---
     async function startVolumeMeter() {
       try {
         stopVolumeMeter();
@@ -378,9 +380,9 @@
       document.getElementById('micVolumeValue').textContent = '0 %';
     }
 
-    // マイク音量テスト（5秒間計測とリアルタイム解決案内）
+    // マイク音量テスト
     async function runMicTest() {
-      if (isListening) stopListening(); // リアルタイム聞き取り中の場合は一時停止
+      if (isListening) stopListening();
 
       setStatus(
         'マイク音量テスト中（5秒間）... マイクに向かって声を出してください。\n' +
@@ -405,7 +407,7 @@
 
       setTimeout(() => {
         clearInterval(checkInterval);
-        stopVolumeMeter(); // 音声認識の邪魔にならないようテスト後はマイクを即座に解放
+        stopVolumeMeter();
 
         if (maxLevelDetected > 3) {
           setStatus(`テスト完了：音声入力を正常に検知しました！（最大音量: ${maxLevelDetected}%）`, 'ok');
@@ -419,7 +421,105 @@
       }, 5000);
     }
 
-    // --- 音声入力・録音ファイル処理 ---
+    // --- テキスト解析 ＆ テーブル反映処理 ---
+    function processTextToTable() {
+      const text = document.getElementById('latestText').value.trim();
+      if (!text) {
+        setStatus('テキストエリアに音声結果が入っていません。', 'error');
+        return;
+      }
+
+      const parsedRows = parseSpeechText(text);
+
+      if (parsedRows.length > 0) {
+        rows.push(...parsedRows);
+        renderTable();
+        setStatus(`${parsedRows.length} 件の測定データを表に追加しました。`, 'ok');
+        document.getElementById('latestText').value = '';
+      } else {
+        setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
+      }
+    }
+
+    function parseSpeechText(text) {
+      const normalized = normalizeText(text);
+
+      // 句読点、改行、または「◯番」区切りで分割
+      let rawChunks = normalized
+        .replace(/(\d+)\s*(?:番|ばん)/g, '\n$1番 ')
+        .split(/[\n。！？]/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const parsed = [];
+
+      rawChunks.forEach(chunk => {
+        const parsedRows = parseOneChunk(chunk);
+        if (parsedRows && parsedRows.length > 0) {
+          parsed.push(...parsedRows);
+        }
+      });
+
+      return parsed;
+    }
+
+    function parseOneChunk(chunk) {
+      let number = null;
+      
+      const numberMatch = chunk.match(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/);
+      if (numberMatch) {
+        number = numberMatch[1];
+      }
+
+      let bodyText = chunk.replace(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/g, '').trim();
+
+      const nums = bodyText.match(/[0-9]+(?:\.[0-9]+)?/g) || [];
+      if (nums.length < 2) return null; // 最低でも体長と体重の2個の数値が必要
+
+      let deformity = findDeformityLevel(chunk);
+
+      const results = [];
+      for (let i = 0; i < nums.length - 1; i += 2) {
+        const lengthCm = Number(nums[i]);
+        const weightG = Number(nums[i + 1]);
+
+        if (isFinite(lengthCm) && isFinite(weightG)) {
+          results.push({
+            number: number || String(getLastNumberInRows() + results.length + 1),
+            lengthCm,
+            weightG,
+            deformity: deformity || 'なし'
+          });
+        }
+      }
+
+      return results;
+    }
+
+    function normalizeText(text) {
+      return String(text || '')
+        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/．/g, '.')
+        .replace(/点/g, '.')
+        .replace(/センチメートル|センチ|cm/gi, '')
+        .replace(/グラム|g/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function findDeformityLevel(text) {
+      const str = String(text || '').trim();
+
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Cсシーしー])/i)) return 'C';
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Bｂビーびー])/i)) return 'B';
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Aａエーえー])/i)) return 'A';
+      if (str.match(/なし|無し|無|正常/)) return 'なし';
+
+      return 'なし';
+    }
+
+    // --- 録音ファイル処理 ---
     async function uploadAndProcessAudio(input) {
       const file = input.files[0];
       if (!file) return;
@@ -446,66 +546,13 @@
         if (!resData.ok) throw new Error(resData.error);
 
         document.getElementById('latestText').value = resData.text;
-        const parsedRows = parseAiResultText(resData.text);
-
-        if (parsedRows.length > 0) {
-          rows.push(...parsedRows);
-          renderTable();
-          setStatus(`解析完了！ ${parsedRows.length} 件の測定データを追加しました。`, 'ok');
-        } else {
-          setStatus('音声から数値データを抽出できませんでした。', 'error');
-        }
+        processTextToTable();
 
       } catch (err) {
         setStatus(`解析エラー: ${err.message}`, 'error');
       } finally {
         input.value = '';
       }
-    }
-
-    // 変形レベルの文字列からアルファベット（A, B, C, なし）を抽出
-    function findDeformityLevel(text) {
-      const str = String(text || '').trim();
-
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Cсシーしー])/i)) return 'C';
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Bｂビーびー])/i)) return 'B';
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Aａエーえー])/i)) return 'A';
-      if (str.match(/なし|無し|無|正常/)) return 'なし';
-
-      return 'なし';
-    }
-
-    function parseAiResultText(text) {
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      const parsed = [];
-      let lastNumber = getLastNumberInRows();
-
-      lines.forEach(line => {
-        const parts = line.split(/\s+/);
-        if (parts.length < 3) return;
-
-        let rawNum = parts[0];
-        let lengthCm = Number(parts[1]);
-        let weightG = Number(parts[2]);
-        let rawDeformity = parts.slice(3).join(' ') || 'なし';
-
-        if (!isFinite(lengthCm) || !isFinite(weightG)) return;
-
-        let currentNumber = '';
-        if (rawNum !== '-' && isFinite(Number(rawNum))) {
-          currentNumber = String(Number(rawNum));
-          lastNumber = Number(rawNum);
-        } else {
-          lastNumber++;
-          currentNumber = String(lastNumber);
-        }
-
-        let deformity = findDeformityLevel(rawDeformity);
-
-        parsed.push({ number: currentNumber, lengthCm, weightG, deformity });
-      });
-
-      return parsed;
     }
 
     function getLastNumberInRows() {
@@ -543,13 +590,29 @@
       };
 
       recognition.onresult = (event) => {
-        let transcript = '';
+        let interim = '';
+        let finalTranscript = '';
+
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interim += transcript;
+          }
         }
-        if (transcript) {
-          document.getElementById('latestText').value = transcript;
+
+        if (finalTranscript || interim) {
+          document.getElementById('latestText').value = (finalTranscript + interim).trim();
         }
+
+        // 音声認識の区切り（発話確定時）または無音（2秒経過）で自動的に表に追加
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          if (document.getElementById('latestText').value.trim()) {
+            processTextToTable();
+          }
+        }, 2000);
       };
 
       recognition.onerror = (event) => {
@@ -568,7 +631,7 @@
     }
 
     function startListening() {
-      stopVolumeMeter(); // 音量テストが動いていれば停止してマイクを完全に解放
+      stopVolumeMeter();
       if (!recognition) setupSpeechRecognition();
 
       isListening = true;
@@ -581,8 +644,14 @@
 
     function stopListening() {
       isListening = false;
+      clearTimeout(silenceTimer);
       if (recognition) recognition.stop();
       setStatus('マイク停止中', '');
+      
+      // マイク停止時にテキストが残っていれば表に反映
+      if (document.getElementById('latestText').value.trim()) {
+        processTextToTable();
+      }
     }
 
     // テーブル操作関数群
