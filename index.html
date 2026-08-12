@@ -203,7 +203,7 @@
       <label>音声入力</label>
 
       <div class="hint">
-        ・「マイクテスト」を押して声を出した時、入力音量（％）の数字とバーが伸びるか確認してください。<br>
+        ・「マイクテスト」を押して声を出した時、入力音量（％）の数値が動くか確認してください。<br>
         ・録音ファイル（m4a, mp3, wav等）のAI自動解析にも対応しています。
       </div>
 
@@ -299,17 +299,15 @@
       renderTable();
     });
 
-    // --- 改良版：音量メーター処理 ---
+    // --- 音量メーター処理 ---
     async function startVolumeMeter() {
       try {
-        stopVolumeMeter(); // 既存のストリームがあれば初期化
+        stopVolumeMeter();
 
-        // 1. マイクからストリームを取得
         micStream = await navigator.mediaDevices.getUserMedia({ 
           audio: { echoCancellation: false, noiseSuppression: false } 
         });
 
-        // 2. AudioContext の生成とアクティブ化（ユーザー操作起点）
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') {
           await audioCtx.resume();
@@ -329,26 +327,22 @@
         function update() {
           analyser.getByteFrequencyData(dataArray);
 
-          // RMS (二乗平均平方根) で実際の音のエネルギーを計算
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
             sum += dataArray[i] * dataArray[i];
           }
           let rms = Math.sqrt(sum / dataArray.length);
-
-          // 0〜100% に換算（目視しやすいように感度増幅）
           let level = Math.min(100, Math.round((rms / 128) * 100 * 2.2));
 
           bar.style.width = level + '%';
           valText.textContent = level + ' %';
 
-          // 音量に応じた色変化（反応している時は緑）
           if (level > 75) {
-            bar.style.background = '#d93025'; // 爆音（赤）
+            bar.style.background = '#d93025';
           } else if (level > 3) {
-            bar.style.background = '#188038'; // 正常検知（緑）
+            bar.style.background = '#188038';
           } else {
-            bar.style.background = '#aaaaaa'; // 無音（灰）
+            bar.style.background = '#aaaaaa';
           }
 
           animFrameId = requestAnimationFrame(update);
@@ -357,7 +351,7 @@
         update();
         return true;
       } catch (err) {
-        setStatus(`マイク音量取得エラー: ${err.message}`, 'error');
+        setStatus(`マイクアクセスエラー: ブラウザのアドレスバー付近でマイクがブロックされていないか確認してください。（${err.message}）`, 'error');
         return false;
       }
     }
@@ -378,14 +372,14 @@
       document.getElementById('micVolumeValue').textContent = '0 %';
     }
 
-    // マイク音量テスト（ボタンクリックで実行）
+    // マイク音量テスト（5秒間計測と対話型アシスト）
     async function runMicTest() {
-      setStatus('マイク音量テスト中... マイクに向かって声を割り込ませてください（5秒間）', 'processing');
+      setStatus('マイク音量テスト中... マイクに向かって声を出してください（5秒間）', 'processing');
       const ok = await startVolumeMeter();
       if (ok) {
         setTimeout(() => {
           stopVolumeMeter();
-          setStatus('マイクテスト完了。緑のバーや数値％が動いていればマイクは正常です。', 'ok');
+          setStatus('テスト終了。音量が0%から動かなかった場合は以下を確認してください：\n① ブラウザのアドレスバー横で「マイクを許可」にする\n② OSの設定（Windows/Mac）で正しく「入力マイク」が選ばれているか確認する', 'ok');
         }, 5000);
       }
     }
@@ -434,6 +428,19 @@
       }
     }
 
+    // 変形レベルの文字列からアルファベット（A, B, C, なし）を抽出する関数
+    function findDeformityLevel(text) {
+      const str = String(text || '').trim();
+
+      // 形態異常 / 変形 / レベル が含まれる複合語からアルファベットを特定
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Cсシーしー])/i)) return 'C';
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Bｂビーびー])/i)) return 'B';
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Aａエーえー])/i)) return 'A';
+      if (str.match(/なし|無し|無|正常/)) return 'なし';
+
+      return 'なし';
+    }
+
     function parseAiResultText(text) {
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const parsed = [];
@@ -446,7 +453,7 @@
         let rawNum = parts[0];
         let lengthCm = Number(parts[1]);
         let weightG = Number(parts[2]);
-        let deformity = parts[3] || 'なし';
+        let rawDeformity = parts.slice(3).join(' ') || 'なし';
 
         if (!isFinite(lengthCm) || !isFinite(weightG)) return;
 
@@ -459,9 +466,8 @@
           currentNumber = String(lastNumber);
         }
 
-        if (!['なし', 'A', 'B', 'C'].includes(deformity)) {
-          deformity = 'なし';
-        }
+        // 変形レベル（「形態異常B」等から「B」を取り出す）
+        let deformity = findDeformityLevel(rawDeformity);
 
         parsed.push({ number: currentNumber, lengthCm, weightG, deformity });
       });
