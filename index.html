@@ -217,7 +217,7 @@
         <button class="primary" onclick="startListening()">マイク開始</button>
         <button class="danger" onclick="stopListening()">マイク停止</button>
         <button class="secondary" onclick="processTextToTable()">📝 テキストから表に反映</button>
-        <!-- <button class="secondary" onclick="document.getElementById('audioFileInput').click()">📁 録音ファイルを解析</button> -->
+        <button class="secondary" onclick="document.getElementById('audioFileInput').click()">📁 録音ファイルを解析</button>
         <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
       </div>
 
@@ -272,7 +272,7 @@
     // ==========================================
     // 1. 設定用定数
     // ==========================================
-    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzoaUgf3om8gRnXOXOxpA1ZfoUaiygsriozMvjVaxnGcd7QhGLtp-7N25OFtexV0FeFlQ/exec';
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxp2lcJyDW3NLUnxXGpIB9T7k1S-DnC1xi23yzWJPiFiw4VSmhQjWAjibba1Iqg0o0gBg/exec';
 
 
     // ==========================================
@@ -767,5 +767,7 @@
       return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
   </script>
+</body>
+</html>
 </body>
 </html>
