@@ -81,7 +81,6 @@
     .primary { background: #1a73e8; color: #fff; }
     .danger { background: #d93025; color: #fff; }
     .secondary { background: #e8eefb; color: #1a3d7c; }
-    .ai-btn { background: #7c4dff; color: #fff; }
 
     .save {
       background: #188038;
@@ -94,10 +93,11 @@
     .status {
       font-weight: 700;
       margin-top: 8px;
+      white-space: pre-wrap;
     }
 
     .listening { color: #d93025; }
-    .processing { color: #7c4dff; }
+    .processing { color: #1a73e8; }
     .ok { color: #188038; }
     .error { color: #d93025; }
 
@@ -203,8 +203,10 @@
       <label>音声入力</label>
 
       <div class="hint">
-        ・「マイクテスト」を押して声を出した時、入力音量（％）の数値が動くか確認してください。<br>
-        ・録音ファイル（m4a, mp3, wav等）のAI自動解析にも対応しています。
+        話し方の例：<br>
+        「10番 13センチ 27グラム」<br>
+        「13センチ 36グラム 形態異常B」<br>
+        「11センチ 18グラム 形態異常C」
       </div>
 
       <!-- 隠しファイル選択 -->
@@ -214,7 +216,7 @@
         <button class="secondary" onclick="runMicTest()">🎙️ マイク音量テスト</button>
         <button class="primary" onclick="startListening()">マイク開始</button>
         <button class="danger" onclick="stopListening()">マイク停止</button>
-        <button class="ai-btn" onclick="document.getElementById('audioFileInput').click()">📁 録音ファイルをAI解析</button>
+        <button class="secondary" onclick="document.getElementById('audioFileInput').click()">📁 録音ファイルを解析</button>
         <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
       </div>
 
@@ -232,7 +234,7 @@
       <div id="status" class="status">待機中</div>
 
       <div style="margin-top: 12px;">
-        <label for="latestText">AIテキスト化結果</label>
+        <label for="latestText">テキスト化結果</label>
         <textarea id="latestText" placeholder="ここに解析結果が表示されます。"></textarea>
       </div>
     </div>
@@ -297,9 +299,10 @@
 
       document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
       renderTable();
+      setupSpeechRecognition();
     });
 
-    // --- 音量メーター処理 ---
+    // --- 音量メーター処理（競合を防ぐため独立動作） ---
     async function startVolumeMeter() {
       try {
         stopVolumeMeter();
@@ -325,6 +328,7 @@
         const valText = document.getElementById('micVolumeValue');
 
         function update() {
+          if (!analyser) return;
           analyser.getByteFrequencyData(dataArray);
 
           let sum = 0;
@@ -358,6 +362,7 @@
 
     function stopVolumeMeter() {
       if (animFrameId) cancelAnimationFrame(animFrameId);
+      animFrameId = null;
       if (micStream) {
         micStream.getTracks().forEach(t => t.stop());
         micStream = null;
@@ -366,22 +371,52 @@
         audioCtx.close();
         audioCtx = null;
       }
+      analyser = null;
 
       document.getElementById('micVolumeBar').style.width = '0%';
       document.getElementById('micVolumeBar').style.background = '#aaaaaa';
       document.getElementById('micVolumeValue').textContent = '0 %';
     }
 
-    // マイク音量テスト（5秒間計測と対話型アシスト）
+    // マイク音量テスト（5秒間計測とリアルタイム解決案内）
     async function runMicTest() {
-      setStatus('マイク音量テスト中... マイクに向かって声を出してください（5秒間）', 'processing');
+      if (isListening) stopListening(); // リアルタイム聞き取り中の場合は一時停止
+
+      setStatus(
+        'マイク音量テスト中（5秒間）... マイクに向かって声を出してください。\n' +
+        '【音量が 0% のまま動かない場合の確認項目】\n' +
+        '① ブラウザのアドレスバー横で「マイクの許可」が選ばれているか\n' +
+        '② OS設定（Windows/Mac）で正しい「入力マイク」が選ばれているか\n' +
+        '③ OS設定（Windows/Mac）で「マイク入力音量」が0%やミュートになっていないか', 
+        'processing'
+      );
+
+      let maxLevelDetected = 0;
       const ok = await startVolumeMeter();
-      if (ok) {
-        setTimeout(() => {
-          stopVolumeMeter();
-          setStatus('テスト終了。音量が0%から動かなかった場合は以下を確認してください：\n① ブラウザのアドレスバー横で「マイクを許可」にする\n② OSの設定（Windows/Mac）で正しく「入力マイク」が選ばれているか確認する', 'ok');
-        }, 5000);
-      }
+      if (!ok) return;
+
+      const checkInterval = setInterval(() => {
+        const valText = document.getElementById('micVolumeValue').textContent;
+        const currentLevel = parseInt(valText, 10) || 0;
+        if (currentLevel > maxLevelDetected) {
+          maxLevelDetected = currentLevel;
+        }
+      }, 100);
+
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        stopVolumeMeter(); // 音声認識の邪魔にならないようテスト後はマイクを即座に解放
+
+        if (maxLevelDetected > 3) {
+          setStatus(`テスト完了：音声入力を正常に検知しました！（最大音量: ${maxLevelDetected}%）`, 'ok');
+        } else {
+          setStatus(
+            'テスト完了：音量が検知されませんでした（0%）。\n' +
+            '上記の確認項目（①〜③）をご確認の上、端末の設定を見直してください。', 
+            'error'
+          );
+        }
+      }, 5000);
     }
 
     // --- 音声入力・録音ファイル処理 ---
@@ -393,7 +428,7 @@
         setStatus(`ファイル「${file.name}」を読み込んでいます...`, 'processing');
         const base64Data = await fileToBase64(file);
 
-        setStatus(`クラウドAI（Gemini）で高精度解析中... 数秒お待ちください`, 'processing');
+        setStatus(`クラウドで解析中... 数秒お待ちください`, 'processing');
 
         const payload = {
           action: 'transcribeAudio',
@@ -428,11 +463,10 @@
       }
     }
 
-    // 変形レベルの文字列からアルファベット（A, B, C, なし）を抽出する関数
+    // 変形レベルの文字列からアルファベット（A, B, C, なし）を抽出
     function findDeformityLevel(text) {
       const str = String(text || '').trim();
 
-      // 形態異常 / 変形 / レベル が含まれる複合語からアルファベットを特定
       if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Cсシーしー])/i)) return 'C';
       if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Bｂビーびー])/i)) return 'B';
       if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Aａエーえー])/i)) return 'A';
@@ -466,7 +500,6 @@
           currentNumber = String(lastNumber);
         }
 
-        // 変形レベル（「形態異常B」等から「B」を取り出す）
         let deformity = findDeformityLevel(rawDeformity);
 
         parsed.push({ number: currentNumber, lengthCm, weightG, deformity });
@@ -492,10 +525,13 @@
       });
     }
 
-    // リアルタイムマイク用処理
+    // リアルタイムマイク（Web Speech API）用処理
     function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
+      if (!SpeechRecognition) {
+        setStatus('このブラウザはリアルタイム音声入力に対応していません。Chromeを利用してください。', 'error');
+        return;
+      }
 
       recognition = new SpeechRecognition();
       recognition.lang = 'ja-JP';
@@ -503,32 +539,50 @@
       recognition.interimResults = true;
 
       recognition.onstart = () => {
-        setStatus('マイク聞き取り中...', 'listening');
-        startVolumeMeter();
+        setStatus('マイク聞き取り中... 測定値を話してください。', 'listening');
       };
+
       recognition.onresult = (event) => {
         let transcript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        document.getElementById('latestText').value = transcript;
+        if (transcript) {
+          document.getElementById('latestText').value = transcript;
+        }
       };
+
+      recognition.onerror = (event) => {
+        if (event.error !== 'no-speech') {
+          setStatus(`音声認識エラー: ${event.error}`, 'error');
+        }
+      };
+
       recognition.onend = () => {
-        stopVolumeMeter();
-        if (!isListening) setStatus('マイク停止中', '');
+        if (isListening) {
+          try { recognition.start(); } catch (e) {}
+        } else {
+          setStatus('マイク停止中', '');
+        }
       };
     }
 
     function startListening() {
+      stopVolumeMeter(); // 音量テストが動いていれば停止してマイクを完全に解放
       if (!recognition) setupSpeechRecognition();
+
       isListening = true;
-      try { recognition.start(); } catch (e) {}
+      try {
+        recognition.start();
+      } catch (e) {
+        setStatus('すでに聞き取り中です。', 'listening');
+      }
     }
 
     function stopListening() {
       isListening = false;
       if (recognition) recognition.stop();
-      stopVolumeMeter();
+      setStatus('マイク停止中', '');
     }
 
     // テーブル操作関数群
