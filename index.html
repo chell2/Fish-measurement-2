@@ -104,7 +104,7 @@
     /* 音量メーター */
     .mic-meter-wrapper {
       margin-top: 12px;
-      padding: 10px;
+      padding: 12px;
       background: #f0f4f9;
       border-radius: 10px;
     }
@@ -112,7 +112,7 @@
     .mic-meter-label {
       font-size: 13px;
       font-weight: 700;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
       display: flex;
       justify-content: space-between;
     }
@@ -120,7 +120,7 @@
     .progress-container {
       background: #d8dde8;
       border-radius: 8px;
-      height: 14px;
+      height: 16px;
       width: 100%;
       overflow: hidden;
     }
@@ -128,8 +128,8 @@
     .progress-bar {
       height: 100%;
       width: 0%;
-      background: #188038;
-      transition: width 0.1s ease;
+      background: #aaaaaa;
+      transition: width 0.05s linear;
     }
 
     .hint {
@@ -203,7 +203,7 @@
       <label>音声入力</label>
 
       <div class="hint">
-        ・「マイクテスト」を押すと、声の大きさが入力音量（％）で確認できます。<br>
+        ・「マイクテスト」を押して声を出した時、入力音量（％）の数字とバーが伸びるか確認してください。<br>
         ・録音ファイル（m4a, mp3, wav等）のAI自動解析にも対応しています。
       </div>
 
@@ -299,15 +299,28 @@
       renderTable();
     });
 
-    // --- 音量メーター処理 ---
+    // --- 改良版：音量メーター処理 ---
     async function startVolumeMeter() {
       try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stopVolumeMeter(); // 既存のストリームがあれば初期化
+
+        // 1. マイクからストリームを取得
+        micStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: { echoCancellation: false, noiseSuppression: false } 
+        });
+
+        // 2. AudioContext の生成とアクティブ化（ユーザー操作起点）
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+
         analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.3;
+
         const source = audioCtx.createMediaStreamSource(micStream);
         source.connect(analyser);
-        analyser.fftSize = 256;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const bar = document.getElementById('micVolumeBar');
@@ -315,54 +328,64 @@
 
         function update() {
           analyser.getByteFrequencyData(dataArray);
+
+          // RMS (二乗平均平方根) で実際の音のエネルギーを計算
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
+            sum += dataArray[i] * dataArray[i];
           }
-          let avg = sum / dataArray.length;
-          // 0~100% に変換（感度調整用に1.8倍）
-          let level = Math.min(100, Math.round((avg / 128) * 100 * 1.8));
+          let rms = Math.sqrt(sum / dataArray.length);
+
+          // 0〜100% に換算（目視しやすいように感度増幅）
+          let level = Math.min(100, Math.round((rms / 128) * 100 * 2.2));
 
           bar.style.width = level + '%';
           valText.textContent = level + ' %';
 
-          // 音量レベルに応じた色の変化（適正:緑 / 過大:赤）
-          if (level > 80) {
-            bar.style.background = '#d93025'; // 赤
-          } else if (level > 5) {
-            bar.style.background = '#188038'; // 緑
+          // 音量に応じた色変化（反応している時は緑）
+          if (level > 75) {
+            bar.style.background = '#d93025'; // 爆音（赤）
+          } else if (level > 3) {
+            bar.style.background = '#188038'; // 正常検知（緑）
           } else {
-            bar.style.background = '#aaaaaa'; // 灰
+            bar.style.background = '#aaaaaa'; // 無音（灰）
           }
 
           animFrameId = requestAnimationFrame(update);
         }
+
         update();
         return true;
       } catch (err) {
-        setStatus(`マイクアクセスエラー: ${err.message}`, 'error');
+        setStatus(`マイク音量取得エラー: ${err.message}`, 'error');
         return false;
       }
     }
 
     function stopVolumeMeter() {
       if (animFrameId) cancelAnimationFrame(animFrameId);
-      if (micStream) micStream.getTracks().forEach(t => t.stop());
-      if (audioCtx) audioCtx.close();
-      
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      if (audioCtx) {
+        audioCtx.close();
+        audioCtx = null;
+      }
+
       document.getElementById('micVolumeBar').style.width = '0%';
+      document.getElementById('micVolumeBar').style.background = '#aaaaaa';
       document.getElementById('micVolumeValue').textContent = '0 %';
     }
 
-    // 単独のマイク音量テスト実行（5秒間計測）
+    // マイク音量テスト（ボタンクリックで実行）
     async function runMicTest() {
-      stopVolumeMeter();
       setStatus('マイク音量テスト中... マイクに向かって声を割り込ませてください（5秒間）', 'processing');
       const ok = await startVolumeMeter();
       if (ok) {
         setTimeout(() => {
           stopVolumeMeter();
-          setStatus('マイクテスト完了。数値％が大きく動いていればマイクは正常です。', 'ok');
+          setStatus('マイクテスト完了。緑のバーや数値％が動いていればマイクは正常です。', 'ok');
         }, 5000);
       }
     }
@@ -475,7 +498,7 @@
 
       recognition.onstart = () => {
         setStatus('マイク聞き取り中...', 'listening');
-        startVolumeMeter(); // 聞き取り中も音量メーターを動作させる
+        startVolumeMeter();
       };
       recognition.onresult = (event) => {
         let transcript = '';
