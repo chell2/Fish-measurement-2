@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>魚体測定 音声入力</title>
-  <style>
+    <style>
     body {
       margin: 0; padding: 16px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -17,12 +17,28 @@
       margin-bottom: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);
     }
     label { display: block; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    
     input, textarea, select {
       width: 100%; box-sizing: border-box; font-size: 16px;
-      padding: 10px 12px; border: 1px solid #d8dde8; border-radius: 10px; background: #fff;
+      border: 1px solid #d8dde8; border-radius: 10px; background: #fff;
+      margin: 0; 
     }
-    textarea { min-height: 90px; resize: vertical; }
+    input, select {
+      height: 44px; padding: 0 12px; /* 高さを44pxに固定 */
+    }
+    textarea {
+      height: auto; min-height: 90px; padding: 10px 12px; resize: vertical;
+    }
+
+    /* iOS特有の日付入力欄のはみ出しバグを強制リセット */
+    input[type="date"] {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+    }
+
     .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .grid > div { min-width: 0; } /* はみ出し防止処理 */
     
     .input-group { display: flex; width: 100%; }
     .input-group select { 
@@ -34,27 +50,29 @@
 
     .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     
-    /* すべてのボタンの基本設定（丸くする） */
+    /* すべてのボタンの基本設定 */
     button {
       border: none; border-radius: 999px; padding: 12px 18px;
-      font-size: 16px; font-weight: 700; cursor: pointer;
+      font-size: 16px; font-weight: 700; cursor: pointer; margin: 0;
     }
 
-    /* ＋・－ボタン専用設定（基本設定を上書きして四角くする） */
+    /* ＋・－ボタン専用設定（基本設定を上書きして四角くする＆高さ44px固定） */
     button.del-btn {
-      border-radius: 0 !important; /* マイナスボタンの両端をまっすぐに */
+      border-radius: 0 !important; 
       border: 1px solid #d8dde8 !important; 
       border-right: none !important; 
       background: #fff4f4; color: #d93025;
       padding: 0 14px; font-size: 16px; font-weight: bold;
+      height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
     }
     button.del-btn:active { background: #fde8e8; }
 
     button.add-btn {
-      border-radius: 0 10px 10px 0 !important; /* プラスボタンは右側だけ丸く */
+      border-radius: 0 10px 10px 0 !important; 
       border: 1px solid #d8dde8 !important; 
       background: #f8fafd; color: #1a73e8;
       padding: 0 16px; font-size: 18px; font-weight: bold;
+      height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
     }
     button.add-btn:active { background: #e8eefb; }
 
@@ -100,20 +118,9 @@
     @media (max-width: 640px) {
       body { padding: 12px; } 
       .grid { grid-template-columns: 1fr; }
+      h1 { font-size: 21px; } 
       
-      /* グリッド内の要素が文字サイズ等で強制的に広がるのを防ぐ */
-      .grid > div { min-width: 0; }
-
       .buttons button { width: 100%; }
-      
-      /* 測定日のはみ出し防止を強制 */
-      input[type="date"] { 
-        width: 100%; 
-        max-width: 100%; 
-        box-sizing: border-box; 
-        display: block;
-        min-width: 0;
-      }
       
       /* スマホ時の幅調整：プルダウン 2/3、マイナス 1/6、プラス 1/6 */
       .input-group select {
@@ -124,9 +131,6 @@
         flex: 0 0 16.66%; 
         width: 16.66%;
         padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
       }
     }
   </style>
