@@ -100,10 +100,20 @@
     @media (max-width: 640px) {
       body { padding: 12px; } 
       .grid { grid-template-columns: 1fr; }
-      h1 { font-size: 21px; } 
       
+      /* グリッド内の要素が文字サイズ等で強制的に広がるのを防ぐ */
+      .grid > div { min-width: 0; }
+
       .buttons button { width: 100%; }
-      input[type="date"] { max-width: 100%; box-sizing: border-box; }
+      
+      /* 測定日のはみ出し防止を強制 */
+      input[type="date"] { 
+        width: 100%; 
+        max-width: 100%; 
+        box-sizing: border-box; 
+        display: block;
+        min-width: 0;
+      }
       
       /* スマホ時の幅調整：プルダウン 2/3、マイナス 1/6、プラス 1/6 */
       .input-group select {
