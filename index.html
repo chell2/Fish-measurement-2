@@ -244,10 +244,13 @@
 
   <script>
     // ==========================================
-    // 1. 設定用定数（デプロイURLをここに貼る）
+    // 1. 設定用定数
     // ==========================================
     const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxp2lcJyDW3NLUnxXGpIB9T7k1S-DnC1xi23yzWJPiFiw4VSmhQjWAjibba1Iqg0o0gBg/exec';
 
+    // ==========================================
+    // 2. アプリのメイン処理
+    // ==========================================
     let recognition = null;
     let isListening = false;
     let rows = [];
@@ -256,6 +259,8 @@
     let analyser = null;
     let micStream = null;
     let animFrameId = null;
+    
+    let textBeforeSession = ''; // 過去の会話を記憶する変数
 
     window.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
@@ -267,7 +272,7 @@
       renderTable();
       setupSpeechRecognition();
 
-      // ★ 起動時にスプレッドシートからリストを読み込む
+      // 起動時にスプレッドシートからリストを読み込む
       loadOptionsFromServer();
     });
 
@@ -490,13 +495,24 @@
     function processTextToTable() {
       const text = document.getElementById('latestText').value.trim();
       if (!text) return setStatus('テキストエリアに音声結果が入っていません。', 'error');
+      
       const parsedRows = parseSpeechText(text);
       if (parsedRows.length > 0) {
         rows.push(...parsedRows);
         renderTable();
         setStatus(`${parsedRows.length} 件の測定データを表に追加しました。`, 'ok');
+        
+        // 成功したらテキストボックスと記憶を空にする
         document.getElementById('latestText').value = '';
-      } else setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
+        textBeforeSession = '';
+        
+        // マイク内に残っている古い記憶（バッファ）を消すため、強制的に一度マイクをリセットする
+        if (isListening && recognition) {
+          recognition.stop(); 
+        }
+      } else {
+        setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
+      }
     }
 
     function parseSpeechText(text) {
@@ -573,24 +589,49 @@
     function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return setStatus('このブラウザはリアルタイム音声入力に対応していません。', 'error');
+      
       recognition = new SpeechRecognition();
-      recognition.lang = 'ja-JP'; recognition.continuous = true; recognition.interimResults = true;
-      recognition.onstart = () => setStatus('マイク聞き取り中... 測定値を話してください。', 'listening');
+      recognition.lang = 'ja-JP'; 
+      recognition.continuous = true; 
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        // マイクが起動（または自動再起動）した瞬間、テキストボックスの文字を記憶する
+        textBeforeSession = document.getElementById('latestText').value.trim();
+        setStatus('マイク聞き取り中... 測定値を話してください。', 'listening');
+      };
+
       recognition.onresult = (event) => {
-        let interim = ''; let finalTranscript = '';
+        let interim = ''; 
+        let currentSessionFinal = '';
+        
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
+          if (event.results[i].isFinal) currentSessionFinal += event.results[i][0].transcript + ' ';
           else interim += event.results[i][0].transcript;
         }
-        if (finalTranscript || interim) document.getElementById('latestText').value = (finalTranscript + interim).trim();
+        
+        // 記憶しておいた過去のテキストと、今回の新しいテキストを繋ぎ合わせる
+        let newText = textBeforeSession;
+        if (newText && (currentSessionFinal || interim)) newText += ' ';
+        newText += currentSessionFinal + interim;
+        
+        if (newText) {
+          document.getElementById('latestText').value = newText.trim();
+        }
+        
         clearTimeout(silenceTimer);
-        // 5秒のインターバル設定
+        // 5秒のインターバル設定（5秒間何も話さなければ表へ反映）
         silenceTimer = setTimeout(() => {
           if (document.getElementById('latestText').value.trim()) processTextToTable();
         }, 5000);
       };
-      recognition.onerror = (event) => { if (event.error !== 'no-speech') setStatus(`音声認識エラー: ${event.error}`, 'error'); };
+
+      recognition.onerror = (event) => { 
+        if (event.error !== 'no-speech') setStatus(`音声認識エラー: ${event.error}`, 'error'); 
+      };
+
       recognition.onend = () => {
+        // 意図せずマイクが切れた場合は自動で再起動
         if (isListening) try { recognition.start(); } catch (e) {}
         else setStatus('マイク停止中', '');
       };
