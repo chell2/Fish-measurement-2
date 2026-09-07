@@ -586,14 +586,10 @@
     function findDeformityLevel(text) {
       const str = String(text || '').trim();
       
-      // 誤変換ワードも形態異常として検知する
-      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Cсシーしー]|女子|じょし|よし|四)/i)) return 'C';
+      // 「異常」「以上」「形態」「携帯」などのキーワードと、A/B/Cの音がセットの場合のみ検知する
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Cｃсシーしー]|女子|じょし|よし|四)/i)) return 'C';
       if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Bｂビーびー]|美|微)/i)) return 'B';
-      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Aａエーえー]|絵|へー)/i)) return 'A';
-      
-      if (str.match(/(?:^|\s)(?:[Cсシーしー]|女子|じょし|よし|四)(?:\s|$)/i)) return 'C';
-      if (str.match(/(?:^|\s)(?:[Bｂビーびー]|美|微)(?:\s|$)/i)) return 'B';
-      if (str.match(/(?:^|\s)(?:[Aａエーえー]|絵|へー)(?:\s|$)/i)) return 'A';
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Aａエーえー]|絵)/i)) return 'A';
 
       if (str.match(/なし|無し|無|正常/)) return 'なし';
       return 'なし';
@@ -623,30 +619,40 @@
       };
 
       recognition.onresult = (event) => {
-        let interim = ''; 
         let currentSessionFinal = '';
+        let interim = '';
         
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) currentSessionFinal += event.results[i][0].transcript + ' ';
-          else interim += event.results[i][0].transcript;
+        for (let i = 0; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            currentSessionFinal += event.results[i][0].transcript + ' ';
+          } else {
+            interim += event.results[i][0].transcript;
+          }
         }
         
         let newText = textBeforeSession;
         if (newText && (currentSessionFinal || interim)) newText += ' ';
         newText += currentSessionFinal + interim;
         
-        if (newText) {
-          document.getElementById('latestText').value = newText.trim();
+        // 「次」という言葉が含まれていたら即時処理！
+        if (newText.match(/次|つぎ/)) {
+          // 「次」という言葉だけを消して、即座に表へ反映
+          newText = newText.replace(/次|つぎ/g, ' ').trim();
+          document.getElementById('latestText').value = newText;
+          clearTimeout(silenceTimer);
+          processTextToTable(false); // タイマーを待たずに0秒で即時実行
+          return; // ここで処理を終わらせる
         }
         
+        document.getElementById('latestText').value = newText.trim();
+        
         clearTimeout(silenceTimer);
-        // 見極め時間を4.5秒（4500）に延長。
-        // これでも分断された場合は、上記の修正により自動で前の行に追記されます。
+        // 「次」と言わなかった時のための保険のタイマー（3秒に短縮）
         silenceTimer = setTimeout(() => {
           if (document.getElementById('latestText').value.trim()) {
             processTextToTable(true);
           }
-        }, 4500);
+        }, 3000); 
       };
 
       recognition.onerror = (event) => { 
