@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>魚体測定 音声入力</title>
-    <style>
+  <style>
     body {
       margin: 0; padding: 16px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -506,16 +506,21 @@
         renderTable();
         setStatus(`${parsedRows.length} 件の測定データを表に追加しました。`, 'ok');
         
-        // 成功したらテキストボックスと記憶を空にする
         document.getElementById('latestText').value = '';
         textBeforeSession = '';
-        
-        // マイク内に残っている古い記憶（バッファ）を消すため、強制的に一度マイクをリセットする
-        if (isListening && recognition) {
-          recognition.stop(); 
-        }
+        if (isListening && recognition) recognition.stop(); 
       } else {
-        setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
+        // 数値がないが「形態異常」だけ聞き取れた場合、直前のデータを上書き更新する
+        const def = findDeformityLevel(text);
+        if (def !== 'なし' && rows.length > 0) {
+           rows[rows.length - 1].deformity = def;
+           renderTable();
+           setStatus(`前のデータに形態異常「${def}」を追記しました。`, 'ok');
+           document.getElementById('latestText').value = '';
+           textBeforeSession = '';
+        } else {
+           setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
+        }
       }
     }
 
@@ -600,7 +605,6 @@
       recognition.interimResults = true;
 
       recognition.onstart = () => {
-        // マイクが起動（または自動再起動）した瞬間、テキストボックスの文字を記憶する
         textBeforeSession = document.getElementById('latestText').value.trim();
         setStatus('マイク聞き取り中... 測定値を話してください。', 'listening');
       };
@@ -614,7 +618,6 @@
           else interim += event.results[i][0].transcript;
         }
         
-        // 記憶しておいた過去のテキストと、今回の新しいテキストを繋ぎ合わせる
         let newText = textBeforeSession;
         if (newText && (currentSessionFinal || interim)) newText += ' ';
         newText += currentSessionFinal + interim;
@@ -624,10 +627,10 @@
         }
         
         clearTimeout(silenceTimer);
-        // 5秒のインターバル設定（5秒間何も話さなければ表へ反映）
+        // 無音判定を「2秒」に設定
         silenceTimer = setTimeout(() => {
           if (document.getElementById('latestText').value.trim()) processTextToTable();
-        }, 5000);
+        }, 2000);
       };
 
       recognition.onerror = (event) => { 
@@ -635,7 +638,6 @@
       };
 
       recognition.onend = () => {
-        // 意図せずマイクが切れた場合は自動で再起動
         if (isListening) try { recognition.start(); } catch (e) {}
         else setStatus('マイク停止中', '');
       };
