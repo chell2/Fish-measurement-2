@@ -24,20 +24,29 @@
     textarea { min-height: 90px; resize: vertical; }
     .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     
+    /* ＋・－ボタン付きのインプットグループ用スタイル */
     .input-group { display: flex; width: 100%; }
-    .input-group select { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; flex-grow: 1; }
-    .add-btn {
-      border: 1px solid #d8dde8; background: #f8fafd; color: #1a73e8;
-      border-radius: 0 10px 10px 0; padding: 0 16px; font-size: 18px; font-weight: bold; cursor: pointer;
+    .input-group select { 
+      border-radius: 10px 0 0 10px;
+      border-right: none; 
+      flex-grow: 1; 
+      min-width: 0;
     }
-    .add-btn:active { background: #e8eefb; }
-
     .del-btn {
-      border: 1px solid #d8dde8; background: #fff4f4; color: #d93025;
+      border-radius: 0 !important;
+      border: 1px solid #d8dde8; 
+      border-right: none; 
+      background: #fff4f4; color: #d93025;
       padding: 0 14px; font-size: 16px; font-weight: bold; cursor: pointer;
-      border-left: none; border-right: none;
     }
     .del-btn:active { background: #fde8e8; }
+    .add-btn {
+      border-radius: 0 10px 10px 0 !important;
+      border: 1px solid #d8dde8; 
+      background: #f8fafd; color: #1a73e8;
+      padding: 0 16px; font-size: 18px; font-weight: bold; cursor: pointer;
+    }
+    .add-btn:active { background: #e8eefb; }
 
     .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     button {
@@ -66,10 +75,7 @@
     .small-btn { padding: 8px 10px; font-size: 13px; border-radius: 8px; }
     .invalid-row { background: #fff4f4; }
     .empty { color: #777; text-align: center; padding: 24px 8px; }
-    @media (max-width: 640px) {
-      body { padding: 12px; } .grid { grid-template-columns: 1fr; }
-      h1 { font-size: 21px; } button { width: 100%; }
-    }
+
     /* カスタムポップアップ用 */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -84,6 +90,33 @@
     .modal-content input { margin-bottom: 16px; }
     .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; }
     .modal-buttons button { padding: 10px 16px; font-size: 14px; border-radius: 8px; }
+
+    /* ===== スマホ用の調整 ===== */
+    @media (max-width: 640px) {
+      body { padding: 12px; } 
+      .grid { grid-template-columns: 1fr; }
+      h1 { font-size: 21px; } 
+      
+      /* 入力グループ（＋－）以外の操作ボタンのみ横幅100%にする */
+      .buttons button { width: 100%; }
+      
+      /* 測定日のはみ出し防止 */
+      input[type="date"] { max-width: 100%; box-sizing: border-box; }
+      
+      /* スマホ時の幅調整：プルダウン 2/3、マイナス 1/6、プラス 1/6 */
+      .input-group select {
+        flex: 0 0 66.66%; 
+        width: 66.66%;
+      }
+      .del-btn, .add-btn {
+        flex: 0 0 16.66%; 
+        width: 16.66%;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
   </style>
 </head>
 <body>
