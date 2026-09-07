@@ -24,7 +24,6 @@
     textarea { min-height: 90px; resize: vertical; }
     .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     
-    /* ＋ボタン付きのインプットグループ用スタイル */
     .input-group { display: flex; width: 100%; }
     .input-group select { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; flex-grow: 1; }
     .add-btn {
@@ -32,6 +31,13 @@
       border-radius: 0 10px 10px 0; padding: 0 16px; font-size: 18px; font-weight: bold; cursor: pointer;
     }
     .add-btn:active { background: #e8eefb; }
+
+    .del-btn {
+      border: 1px solid #d8dde8; background: #fff4f4; color: #d93025;
+      padding: 0 14px; font-size: 16px; font-weight: bold; cursor: pointer;
+      border-left: none; border-right: none;
+    }
+    .del-btn:active { background: #fde8e8; }
 
     .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     button {
@@ -97,6 +103,7 @@
             <select id="measurer">
               <option value="" disabled selected>読込中...</option>
             </select>
+            <button class="del-btn" type="button" onclick="promptDeleteOption('measurer', '測定者')" title="削除">－</button>
             <button class="add-btn" type="button" onclick="promptAddOption('measurer', '測定者')" title="新規追加">＋</button>
           </div>
         </div>
@@ -107,10 +114,10 @@
             <select id="tankName">
               <option value="" disabled selected>読込中...</option>
             </select>
+            <button class="del-btn" type="button" onclick="promptDeleteOption('tank', '水槽')" title="削除">－</button>
             <button class="add-btn" type="button" onclick="promptAddOption('tank', '水槽')" title="新規追加">＋</button>
           </div>
         </div>
-      </div>
     </div>
 
     <div class="card">
@@ -170,9 +177,22 @@
     <div class="modal-content">
       <h3 id="modalTitle">新しい項目を追加</h3>
       <input type="text" id="modalInput" placeholder="名前を入力">
+      <!-- エラーメッセージ表示用 -->
+      <p id="modalError" style="color: #d93025; font-size: 13px; display: none; margin-top: -8px; margin-bottom: 12px; font-weight: bold;"></p>
       <div class="modal-buttons">
         <button class="secondary" onclick="closeModal()">キャンセル</button>
         <button class="primary" onclick="submitModal()">追加する</button>
+      </div>
+    </div>
+  </div>
+  <!-- 削除確認用ポップアップ画面 -->
+  <div id="deleteModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <h3 id="deleteModalTitle">項目の削除</h3>
+      <p id="deleteModalText" style="margin-bottom: 20px; font-size: 15px;"></p>
+      <div class="modal-buttons">
+        <button class="secondary" onclick="closeDeleteModal()">キャンセル</button>
+        <button class="danger" onclick="submitDeleteModal()">削除する</button>
       </div>
     </div>
   </div>
@@ -246,6 +266,7 @@
       currentModalLabel = label;
       document.getElementById('modalTitle').textContent = `新しい${label}を追加`;
       document.getElementById('modalInput').value = '';
+      document.getElementById('modalError').style.display = 'none'; // エラー表示をリセット
       document.getElementById('customModal').style.display = 'flex';
       document.getElementById('modalInput').focus();
     }
@@ -256,12 +277,33 @@
 
     async function submitModal() {
       const newVal = document.getElementById('modalInput').value.trim();
-      if (!newVal) return;
+      const errorEl = document.getElementById('modalError');
       
-      closeModal(); // ポップアップを閉じる
+      // 空欄チェック
+      if (!newVal) {
+        errorEl.textContent = '名前を入力してください。';
+        errorEl.style.display = 'block';
+        return;
+      }
       
-      const select = document.getElementById(currentModalType === 'measurer' ? 'measurer' : 'tankName');
-      select.innerHTML = `<option value="" disabled selected>保存中...</option>`;
+      // 重複チェック
+      const selectId = currentModalType === 'measurer' ? 'measurer' : 'tankName';
+      const selectElement = document.getElementById(selectId);
+      
+      // 現在のプルダウンにある選択肢（文字列）をすべて取得して配列にする
+      const existingValues = Array.from(selectElement.options).map(opt => opt.value);
+      
+      if (existingValues.includes(newVal)) {
+        // 重複している場合はエラーを出して処理を中断する（ダイアログは閉じない）
+        errorEl.textContent = `「${newVal}」は既に存在します。別の名前を入力してください。`;
+        errorEl.style.display = 'block';
+        return;
+      }
+      
+      // 問題なければポップアップを閉じて追加処理へ進む
+      closeModal(); 
+      
+      selectElement.innerHTML = `<option value="" disabled selected>保存中...</option>`;
       
       try {
         const response = await fetch(GAS_WEB_APP_URL, {
@@ -275,7 +317,56 @@
           await loadOptionsFromServer();
           document.getElementById(currentModalType === 'measurer' ? 'measurer' : 'tankName').value = data.value;
         } else {
+          // 通信エラーなどのシステムエラー時
           alert('追加に失敗しました: ' + data.error);
+          await loadOptionsFromServer();
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。');
+        await loadOptionsFromServer();
+      }
+    }
+
+    // --- 削除ポップアップ用処理 ---
+    let targetDeleteType = '';
+    let targetDeleteValue = '';
+
+    function promptDeleteOption(type, label) {
+      const selectId = type === 'measurer' ? 'measurer' : 'tankName';
+      const selectElement = document.getElementById(selectId);
+      const selectedValue = selectElement.value;
+
+      if (!selectedValue) return; // 選択されていない場合は何もしない
+
+      targetDeleteType = type;
+      targetDeleteValue = selectedValue;
+
+      document.getElementById('deleteModalText').textContent = `${label}「${selectedValue}」をリストから完全に削除しますか？`;
+      document.getElementById('deleteModal').style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').style.display = 'none';
+    }
+
+    async function submitDeleteModal() {
+      closeDeleteModal();
+      
+      const selectElement = document.getElementById(targetDeleteType === 'measurer' ? 'measurer' : 'tankName');
+      selectElement.innerHTML = `<option value="" disabled selected>削除中...</option>`;
+      
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'deleteOption', type: targetDeleteType, value: targetDeleteValue })
+        });
+        const data = await response.json();
+        
+        if (data.ok) {
+          await loadOptionsFromServer(); // 削除後にリストを再読み込み
+        } else {
+          alert('削除に失敗しました: ' + data.error);
           await loadOptionsFromServer();
         }
       } catch (err) {
