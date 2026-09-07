@@ -238,27 +238,42 @@
       });
     }
 
-    async function promptAddOption(type, label) {
-      const newVal = prompt(`新しい${label}の名前を入力してください:`);
-      if (!newVal || newVal.trim() === '') return;
+    let currentModalType = '';
+    let currentModalLabel = '';
+
+    function promptAddOption(type, label) {
+      currentModalType = type;
+      currentModalLabel = label;
+      document.getElementById('modalTitle').textContent = `新しい${label}を追加`;
+      document.getElementById('modalInput').value = '';
+      document.getElementById('customModal').style.display = 'flex';
+      document.getElementById('modalInput').focus();
+    }
+
+    function closeModal() {
+      document.getElementById('customModal').style.display = 'none';
+    }
+
+    async function submitModal() {
+      const newVal = document.getElementById('modalInput').value.trim();
+      if (!newVal) return;
       
-      const select = document.getElementById(type === 'measurer' ? 'measurer' : 'tankName');
-      const orgValue = select.value;
+      closeModal(); // ポップアップを閉じる
+      
+      const select = document.getElementById(currentModalType === 'measurer' ? 'measurer' : 'tankName');
       select.innerHTML = `<option value="" disabled selected>保存中...</option>`;
       
       try {
         const response = await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'addOption', type: type, value: newVal.trim() })
+          body: JSON.stringify({ action: 'addOption', type: currentModalType, value: newVal })
         });
         const data = await response.json();
         
         if (data.ok) {
-          // 成功したら全体をリロードして、追加した項目を選択状態にする
           await loadOptionsFromServer();
-          document.getElementById(type === 'measurer' ? 'measurer' : 'tankName').value = data.value;
-          alert(`${label}「${data.value}」を追加しました。`);
+          document.getElementById(currentModalType === 'measurer' ? 'measurer' : 'tankName').value = data.value;
         } else {
           alert('追加に失敗しました: ' + data.error);
           await loadOptionsFromServer();
