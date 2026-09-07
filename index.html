@@ -4,224 +4,115 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>魚体測定 音声入力</title>
-
   <style>
     body {
-      margin: 0;
-      padding: 16px;
+      margin: 0; padding: 16px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f7fb;
-      color: #222;
+      background: #f5f7fb; color: #222;
     }
-
-    .app {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-
-    h1 {
-      font-size: 24px;
-      margin: 0 0 16px;
-    }
-
+    .app { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 24px; margin: 0 0 16px; }
     .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+      background: #fff; border-radius: 16px; padding: 16px;
+      margin-bottom: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);
     }
-
-    label {
-      display: block;
-      font-size: 14px;
-      font-weight: 700;
-      margin-bottom: 6px;
+    label { display: block; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    input, textarea, select {
+      width: 100%; box-sizing: border-box; font-size: 16px;
+      padding: 10px 12px; border: 1px solid #d8dde8; border-radius: 10px; background: #fff;
     }
-
-    input,
-    textarea,
-    select {
-      width: 100%;
-      box-sizing: border-box;
-      font-size: 16px;
-      padding: 10px 12px;
-      border: 1px solid #d8dde8;
-      border-radius: 10px;
-      background: #fff;
+    textarea { min-height: 90px; resize: vertical; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    
+    /* ＋ボタン付きのインプットグループ用スタイル */
+    .input-group { display: flex; width: 100%; }
+    .input-group select { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; flex-grow: 1; }
+    .add-btn {
+      border: 1px solid #d8dde8; background: #f8fafd; color: #1a73e8;
+      border-radius: 0 10px 10px 0; padding: 0 16px; font-size: 18px; font-weight: bold; cursor: pointer;
     }
+    .add-btn:active { background: #e8eefb; }
 
-    textarea {
-      min-height: 90px;
-      resize: vertical;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    .buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 12px;
-    }
-
+    .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     button {
-      border: none;
-      border-radius: 999px;
-      padding: 12px 18px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
+      border: none; border-radius: 999px; padding: 12px 18px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
     }
-
     .primary { background: #1a73e8; color: #fff; }
     .danger { background: #d93025; color: #fff; }
     .secondary { background: #e8eefb; color: #1a3d7c; }
-
-    .save {
-      background: #188038;
-      color: #fff;
-      width: 100%;
-      margin-top: 12px;
-      padding: 14px 18px;
-    }
-
-    .status {
-      font-weight: 700;
-      margin-top: 8px;
-      white-space: pre-wrap;
-    }
-
+    .save { background: #188038; color: #fff; width: 100%; margin-top: 12px; padding: 14px 18px; }
+    .status { font-weight: 700; margin-top: 8px; white-space: pre-wrap; }
     .listening { color: #d93025; }
     .processing { color: #1a73e8; }
     .ok { color: #188038; }
     .error { color: #d93025; }
-
-    /* 音量メーター */
-    .mic-meter-wrapper {
-      margin-top: 12px;
-      padding: 12px;
-      background: #f0f4f9;
-      border-radius: 10px;
-    }
-
-    .mic-meter-label {
-      font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 6px;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .progress-container {
-      background: #d8dde8;
-      border-radius: 8px;
-      height: 16px;
-      width: 100%;
-      overflow: hidden;
-    }
-
-    .progress-bar {
-      height: 100%;
-      width: 0%;
-      background: #aaaaaa;
-      transition: width 0.05s linear;
-    }
-
-    .hint {
-      font-size: 14px;
-      color: #555;
-      line-height: 1.7;
-    }
-
+    .mic-meter-wrapper { margin-top: 12px; padding: 12px; background: #f0f4f9; border-radius: 10px; }
+    .mic-meter-label { font-size: 13px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .progress-container { background: #d8dde8; border-radius: 8px; height: 16px; width: 100%; overflow: hidden; }
+    .progress-bar { height: 100%; width: 0%; background: #aaaaaa; transition: width 0.05s linear; }
+    .hint { font-size: 14px; color: #555; line-height: 1.7; }
     .table-wrap { overflow-x: auto; }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 640px;
-    }
-
-    th, td {
-      border-bottom: 1px solid #e6e9f0;
-      padding: 8px;
-      text-align: left;
-      vertical-align: middle;
-    }
-
-    th {
-      font-size: 13px;
-      background: #f8fafd;
-    }
-
-    td input, td select {
-      padding: 8px;
-      font-size: 15px;
-    }
-
-    .small-btn {
-      padding: 8px 10px;
-      font-size: 13px;
-      border-radius: 8px;
-    }
-
+    table { width: 100%; border-collapse: collapse; min-width: 640px; }
+    th, td { border-bottom: 1px solid #e6e9f0; padding: 8px; text-align: left; vertical-align: middle; }
+    th { font-size: 13px; background: #f8fafd; }
+    td input, td select { padding: 8px; font-size: 15px; }
+    .small-btn { padding: 8px 10px; font-size: 13px; border-radius: 8px; }
     .invalid-row { background: #fff4f4; }
     .empty { color: #777; text-align: center; padding: 24px 8px; }
-
     @media (max-width: 640px) {
-      body { padding: 12px; }
-      .grid { grid-template-columns: 1fr; }
-      h1 { font-size: 21px; }
-      button { width: 100%; }
+      body { padding: 12px; } .grid { grid-template-columns: 1fr; }
+      h1 { font-size: 21px; } button { width: 100%; }
     }
   </style>
 </head>
-
 <body>
   <div class="app">
     <h1>魚体測定 音声入力</h1>
-
+    
     <div class="card">
       <div class="grid">
         <div>
           <label for="measurementDate">測定日</label>
           <input type="date" id="measurementDate">
         </div>
-
+        
         <div>
           <label for="measurer">測定者</label>
-          <input type="text" id="measurer" placeholder="例：三吉">
+          <div class="input-group">
+            <select id="measurer">
+              <option value="" disabled selected>読込中...</option>
+            </select>
+            <button class="add-btn" type="button" onclick="promptAddOption('measurer', '測定者')" title="新規追加">＋</button>
+          </div>
+        </div>
+
+        <div>
+          <label for="tankName">水槽</label>
+          <div class="input-group">
+            <select id="tankName">
+              <option value="" disabled selected>読込中...</option>
+            </select>
+            <button class="add-btn" type="button" onclick="promptAddOption('tank', '水槽')" title="新規追加">＋</button>
+          </div>
         </div>
       </div>
     </div>
 
     <div class="card">
       <label>音声入力</label>
-
       <div class="hint">
         話し方の例：<br>
         「10番 13センチ 27グラム」<br>
         「13センチ 36グラム 形態異常B」<br>
-        「11センチ 18グラム 形態異常C」
       </div>
-
-      <!-- 隠しファイル選択 -->
-      <input type="file" id="audioFileInput" accept="audio/*" style="display: none;" onchange="uploadAndProcessAudio(this)">
-
       <div class="buttons">
-        <button class="secondary" onclick="runMicTest()">🎙️ マイク音量テスト</button>
+        <button class="secondary" onclick="runMicTest()">🎙️ 音量テスト</button>
         <button class="primary" onclick="startListening()">マイク開始</button>
         <button class="danger" onclick="stopListening()">マイク停止</button>
-        <button class="secondary" onclick="processTextToTable()">📝 テキストから表に反映</button>
-        <button class="secondary" onclick="document.getElementById('audioFileInput').click()">📁 録音ファイルを解析</button>
-        <button class="secondary" onclick="addManualRow()">手入力で1行追加</button>
+        <button class="secondary" onclick="processTextToTable()">📝 表に反映</button>
+        <button class="secondary" onclick="addManualRow()">手入力で追加</button>
       </div>
-
-      <!-- マイク音量レベルメーター -->
       <div class="mic-meter-wrapper">
         <div class="mic-meter-label">
           <span>マイク入力音量</span>
@@ -231,9 +122,7 @@
           <div id="micVolumeBar" class="progress-bar"></div>
         </div>
       </div>
-
       <div id="status" class="status">待機中</div>
-
       <div style="margin-top: 12px;">
         <label for="latestText">テキスト化結果</label>
         <textarea id="latestText" placeholder="ここに解析結果が表示されます。話し終えると自動的に表へ反映されます。"></textarea>
@@ -242,7 +131,6 @@
 
     <div class="card">
       <label>測定一覧</label>
-
       <div class="table-wrap">
         <table>
           <thead>
@@ -254,15 +142,11 @@
               <th style="width:90px;">操作</th>
             </tr>
           </thead>
-
           <tbody id="tbody">
-            <tr>
-              <td colspan="5" class="empty">まだ測定データがありません</td>
-            </tr>
+            <tr><td colspan="5" class="empty">まだ測定データがありません</td></tr>
           </tbody>
         </table>
       </div>
-
       <button class="save" onclick="saveRows()">スプレッドシートに登録</button>
       <div id="saveStatus" class="status"></div>
     </div>
@@ -270,94 +154,129 @@
 
   <script>
     // ==========================================
-    // 1. 設定用定数
+    // 1. 設定用定数（デプロイURLをここに貼る）
     // ==========================================
     const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxp2lcJyDW3NLUnxXGpIB9T7k1S-DnC1xi23yzWJPiFiw4VSmhQjWAjibba1Iqg0o0gBg/exec';
 
-
-    // ==========================================
-    // 2. アプリのメイン処理
-    // ==========================================
     let recognition = null;
     let isListening = false;
     let rows = [];
     let silenceTimer = null;
-
-    // 音量計算用オブジェクト
     let audioCtx = null;
     let analyser = null;
     let micStream = null;
     let animFrameId = null;
 
     window.addEventListener('DOMContentLoaded', () => {
-      if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes('YOUR_DEPLOY_ID')) {
-        setStatus('GASのURLが設定されていません。<script>冒頭のGAS_WEB_APP_URLを設定してください。', 'error');
-      }
-
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
       const dd = String(today.getDate()).padStart(2, '0');
-
       document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
+      
       renderTable();
       setupSpeechRecognition();
+
+      // ★ 起動時にスプレッドシートからリストを読み込む
+      loadOptionsFromServer();
     });
+
+    // --- ドロップダウンリスト管理処理 ---
+    async function loadOptionsFromServer() {
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'getOptions' })
+        });
+        const data = await response.json();
+        
+        if (data.ok) {
+          updateSelectOptions('measurer', data.measurers, '測定者を選択');
+          updateSelectOptions('tankName', data.tanks, '水槽を選択');
+        } else {
+          console.error("リスト読み込みエラー: ", data.error);
+        }
+      } catch (err) {
+        console.error("通信エラー: ", err);
+      }
+    }
+
+    function updateSelectOptions(elementId, items, placeholder) {
+      const select = document.getElementById(elementId);
+      select.innerHTML = `<option value="" disabled selected>${placeholder}</option>`;
+      items.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        option.textContent = item;
+        select.appendChild(option);
+      });
+    }
+
+    async function promptAddOption(type, label) {
+      const newVal = prompt(`新しい${label}の名前を入力してください:`);
+      if (!newVal || newVal.trim() === '') return;
+      
+      const select = document.getElementById(type === 'measurer' ? 'measurer' : 'tankName');
+      const orgValue = select.value;
+      select.innerHTML = `<option value="" disabled selected>保存中...</option>`;
+      
+      try {
+        const response = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'addOption', type: type, value: newVal.trim() })
+        });
+        const data = await response.json();
+        
+        if (data.ok) {
+          // 成功したら全体をリロードして、追加した項目を選択状態にする
+          await loadOptionsFromServer();
+          document.getElementById(type === 'measurer' ? 'measurer' : 'tankName').value = data.value;
+          alert(`${label}「${data.value}」を追加しました。`);
+        } else {
+          alert('追加に失敗しました: ' + data.error);
+          await loadOptionsFromServer();
+        }
+      } catch (err) {
+        alert('通信エラーが発生しました。');
+        await loadOptionsFromServer();
+      }
+    }
 
     // --- 音量メーター処理 ---
     async function startVolumeMeter() {
       try {
         stopVolumeMeter();
-
-        micStream = await navigator.mediaDevices.getUserMedia({ 
-          audio: { echoCancellation: false, noiseSuppression: false } 
-        });
-
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') {
-          await audioCtx.resume();
-        }
-
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 512;
         analyser.smoothingTimeConstant = 0.3;
-
         const source = audioCtx.createMediaStreamSource(micStream);
         source.connect(analyser);
-
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const bar = document.getElementById('micVolumeBar');
         const valText = document.getElementById('micVolumeValue');
-
         function update() {
           if (!analyser) return;
           analyser.getByteFrequencyData(dataArray);
-
           let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i] * dataArray[i];
-          }
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
           let rms = Math.sqrt(sum / dataArray.length);
           let level = Math.min(100, Math.round((rms / 128) * 100 * 2.2));
-
           bar.style.width = level + '%';
           valText.textContent = level + ' %';
-
-          if (level > 75) {
-            bar.style.background = '#d93025';
-          } else if (level > 3) {
-            bar.style.background = '#188038';
-          } else {
-            bar.style.background = '#aaaaaa';
-          }
-
+          if (level > 75) bar.style.background = '#d93025';
+          else if (level > 3) bar.style.background = '#188038';
+          else bar.style.background = '#aaaaaa';
           animFrameId = requestAnimationFrame(update);
         }
-
         update();
         return true;
       } catch (err) {
-        setStatus(`マイクアクセスエラー: ブラウザのアドレスバー付近でマイクがブロックされていないか確認してください。（${err.message}）`, 'error');
+        setStatus(`マイクアクセスエラー: ブラウザでマイクがブロックされていないか確認してください。（${err.message}）`, 'error');
         return false;
       }
     }
@@ -365,194 +284,105 @@
     function stopVolumeMeter() {
       if (animFrameId) cancelAnimationFrame(animFrameId);
       animFrameId = null;
-      if (micStream) {
-        micStream.getTracks().forEach(t => t.stop());
-        micStream = null;
-      }
-      if (audioCtx) {
-        audioCtx.close();
-        audioCtx = null;
-      }
+      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      if (audioCtx) { audioCtx.close(); audioCtx = null; }
       analyser = null;
-
       document.getElementById('micVolumeBar').style.width = '0%';
       document.getElementById('micVolumeBar').style.background = '#aaaaaa';
       document.getElementById('micVolumeValue').textContent = '0 %';
     }
 
-    // マイク音量テスト
     async function runMicTest() {
       if (isListening) stopListening();
-
-      setStatus(
-        'マイク音量テスト中（5秒間）... マイクに向かって声を出してください。\n' +
-        '【音量が 0% のまま動かない場合の確認項目】\n' +
-        '① ブラウザのアドレスバー横で「マイクの許可」が選ばれているか\n' +
-        '② OS設定（Windows/Mac）で正しい「入力マイク」が選ばれているか\n' +
-        '③ OS設定（Windows/Mac）で「マイク入力音量」が0%やミュートになっていないか', 
-        'processing'
-      );
-
+      setStatus('マイク音量テスト中（5秒間）... マイクに向かって声を出してください。', 'processing');
       let maxLevelDetected = 0;
       const ok = await startVolumeMeter();
       if (!ok) return;
-
       const checkInterval = setInterval(() => {
-        const valText = document.getElementById('micVolumeValue').textContent;
-        const currentLevel = parseInt(valText, 10) || 0;
-        if (currentLevel > maxLevelDetected) {
-          maxLevelDetected = currentLevel;
-        }
+        const currentLevel = parseInt(document.getElementById('micVolumeValue').textContent, 10) || 0;
+        if (currentLevel > maxLevelDetected) maxLevelDetected = currentLevel;
       }, 100);
-
       setTimeout(() => {
         clearInterval(checkInterval);
         stopVolumeMeter();
-
-        if (maxLevelDetected > 3) {
-          setStatus(`テスト完了：音声入力を正常に検知しました！（最大音量: ${maxLevelDetected}%）`, 'ok');
-        } else {
-          setStatus(
-            'テスト完了：音量が検知されませんでした（0%）。\n' +
-            '上記の確認項目（①〜③）をご確認の上、端末の設定を見直してください。', 
-            'error'
-          );
-        }
+        if (maxLevelDetected > 3) setStatus(`テスト完了：正常に検知しました（最大音量: ${maxLevelDetected}%）`, 'ok');
+        else setStatus('テスト完了：音量が検知されませんでした。設定を見直してください。', 'error');
       }, 5000);
     }
 
     // --- テキスト解析 ＆ テーブル反映処理 ---
     function processTextToTable() {
       const text = document.getElementById('latestText').value.trim();
-      if (!text) {
-        setStatus('テキストエリアに音声結果が入っていません。', 'error');
-        return;
-      }
-
+      if (!text) return setStatus('テキストエリアに音声結果が入っていません。', 'error');
       const parsedRows = parseSpeechText(text);
-
       if (parsedRows.length > 0) {
         rows.push(...parsedRows);
         renderTable();
         setStatus(`${parsedRows.length} 件の測定データを表に追加しました。`, 'ok');
         document.getElementById('latestText').value = '';
-      } else {
-        setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
-      }
+      } else setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
     }
 
     function parseSpeechText(text) {
       const normalized = normalizeText(text);
-
-      // 句読点、改行、または「◯番」区切りで分割
-      let rawChunks = normalized
-        .replace(/(\d+)\s*(?:番|ばん)/g, '\n$1番 ')
-        .split(/[\n。！？]/)
-        .map(s => s.trim())
-        .filter(Boolean);
-
+      const textWithoutPunctuation = normalized.replace(/[。、！？]/g, ' ');
+      let rawChunks = textWithoutPunctuation.replace(/(\d+)\s*(?:番|ばん)/g, '\n$1番 ').replace(/次|つぎ/g, '\n').split('\n').map(s => s.trim()).filter(Boolean);
       const parsed = [];
-
       rawChunks.forEach(chunk => {
         const parsedRows = parseOneChunk(chunk);
-        if (parsedRows && parsedRows.length > 0) {
-          parsed.push(...parsedRows);
-        }
+        if (parsedRows && parsedRows.length > 0) parsed.push(...parsedRows);
       });
-
       return parsed;
     }
 
     function parseOneChunk(chunk) {
       let number = null;
-      
       const numberMatch = chunk.match(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/);
-      if (numberMatch) {
-        number = numberMatch[1];
-      }
-
+      if (numberMatch) number = numberMatch[1];
       let bodyText = chunk.replace(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/g, '').trim();
-
       const nums = bodyText.match(/[0-9]+(?:\.[0-9]+)?/g) || [];
-      if (nums.length < 2) return null; // 最低でも体長と体重の2個の数値が必要
-
+      if (nums.length < 2) return null;
       let deformity = findDeformityLevel(chunk);
-
       const results = [];
       for (let i = 0; i < nums.length - 1; i += 2) {
         const lengthCm = Number(nums[i]);
         const weightG = Number(nums[i + 1]);
-
         if (isFinite(lengthCm) && isFinite(weightG)) {
           results.push({
             number: number || String(getLastNumberInRows() + results.length + 1),
-            lengthCm,
-            weightG,
-            deformity: deformity || 'なし'
+            lengthCm, weightG, deformity: deformity || 'なし'
           });
         }
       }
-
       return results;
     }
 
     function normalizeText(text) {
-      return String(text || '')
-        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+      let str = String(text || '');
+      const kansujiMap = {'一':'1','二':'2','三':'3','四':'4','五':'5','六':'6','七':'7','八':'8','九':'9'};
+      str = str.replace(/([二三四五六七八九])十([一二三四五六七八九])/g, (m, a, b) => kansujiMap[a] + kansujiMap[b]);
+      str = str.replace(/([二三四五六七八九])十/g, (m, a) => kansujiMap[a] + '0');
+      str = str.replace(/十([一二三四五六七八九])/g, (m, a) => '1' + kansujiMap[a]);
+      str = str.replace(/十/g, '10');
+      str = str.replace(/[〇一二三四五六七八九]/g, m => (kansujiMap[m] || '0'));
+      return str.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
         .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-        .replace(/．/g, '.')
-        .replace(/点/g, '.')
-        .replace(/センチメートル|センチ|cm/gi, '')
-        .replace(/グラム|g/gi, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .replace(/．/g, '.').replace(/点/g, '.')
+        .replace(/センチメートル|センチ|cm|ミリメートル|ミリ|mm/gi, ' ')
+        .replace(/キログラム|キロ|グラム|g|kg/gi, ' ')
+        .replace(/\s+/g, ' ').trim();
     }
 
     function findDeformityLevel(text) {
       const str = String(text || '').trim();
-
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Cсシーしー])/i)) return 'C';
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Bｂビーびー])/i)) return 'B';
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ)?\s*([Aａエーえー])/i)) return 'A';
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ).*?(?:[Cсシーしー]|女子|じょし|よし|四)/i)) return 'C';
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ).*?(?:[Bｂビーびー]|美|微)/i)) return 'B';
+      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ).*?(?:[Aａエーえー]|絵)/i)) return 'A';
+      if (str.match(/(?:^|\s)(?:[Cсシーしー]|女子|じょし|よし|四)(?:\s|$)/i)) return 'C';
+      if (str.match(/(?:^|\s)(?:[Bｂビーびー]|美|微)(?:\s|$)/i)) return 'B';
+      if (str.match(/(?:^|\s)(?:[Aａエーえー]|絵)(?:\s|$)/i)) return 'A';
       if (str.match(/なし|無し|無|正常/)) return 'なし';
-
       return 'なし';
-    }
-
-    // --- 録音ファイル処理 ---
-    async function uploadAndProcessAudio(input) {
-      const file = input.files[0];
-      if (!file) return;
-
-      try {
-        setStatus(`ファイル「${file.name}」を読み込んでいます...`, 'processing');
-        const base64Data = await fileToBase64(file);
-
-        setStatus(`クラウドで解析中... 数秒お待ちください`, 'processing');
-
-        const payload = {
-          action: 'transcribeAudio',
-          fileData: base64Data,
-          mimeType: file.type || 'audio/m4a'
-        };
-
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-
-        const resData = await response.json();
-        if (!resData.ok) throw new Error(resData.error);
-
-        document.getElementById('latestText').value = resData.text;
-        processTextToTable();
-
-      } catch (err) {
-        setStatus(`解析エラー: ${err.message}`, 'error');
-      } finally {
-        input.value = '';
-      }
     }
 
     function getLastNumberInRows() {
@@ -563,112 +393,55 @@
       }, 0);
     }
 
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = error => reject(error);
-      });
-    }
-
-    // リアルタイムマイク（Web Speech API）用処理
+    // --- リアルタイムマイク ---
     function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        setStatus('このブラウザはリアルタイム音声入力に対応していません。Chromeを利用してください。', 'error');
-        return;
-      }
-
+      if (!SpeechRecognition) return setStatus('このブラウザはリアルタイム音声入力に対応していません。', 'error');
       recognition = new SpeechRecognition();
-      recognition.lang = 'ja-JP';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      recognition.onstart = () => {
-        setStatus('マイク聞き取り中... 測定値を話してください。', 'listening');
-      };
-
+      recognition.lang = 'ja-JP'; recognition.continuous = true; recognition.interimResults = true;
+      recognition.onstart = () => setStatus('マイク聞き取り中... 測定値を話してください。', 'listening');
       recognition.onresult = (event) => {
-        let interim = '';
-        let finalTranscript = '';
-
+        let interim = ''; let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interim += transcript;
-          }
+          if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
+          else interim += event.results[i][0].transcript;
         }
-
-        if (finalTranscript || interim) {
-          document.getElementById('latestText').value = (finalTranscript + interim).trim();
-        }
-
-        // 音声認識の区切り（発話確定時）または無音（2秒経過）で自動的に表に追加
+        if (finalTranscript || interim) document.getElementById('latestText').value = (finalTranscript + interim).trim();
         clearTimeout(silenceTimer);
+        // 5秒のインターバル設定
         silenceTimer = setTimeout(() => {
-          if (document.getElementById('latestText').value.trim()) {
-            processTextToTable();
-          }
-        }, 2000);
+          if (document.getElementById('latestText').value.trim()) processTextToTable();
+        }, 5000);
       };
-
-      recognition.onerror = (event) => {
-        if (event.error !== 'no-speech') {
-          setStatus(`音声認識エラー: ${event.error}`, 'error');
-        }
-      };
-
+      recognition.onerror = (event) => { if (event.error !== 'no-speech') setStatus(`音声認識エラー: ${event.error}`, 'error'); };
       recognition.onend = () => {
-        if (isListening) {
-          try { recognition.start(); } catch (e) {}
-        } else {
-          setStatus('マイク停止中', '');
-        }
+        if (isListening) try { recognition.start(); } catch (e) {}
+        else setStatus('マイク停止中', '');
       };
     }
-
     function startListening() {
       stopVolumeMeter();
       if (!recognition) setupSpeechRecognition();
-
       isListening = true;
-      try {
-        recognition.start();
-      } catch (e) {
-        setStatus('すでに聞き取り中です。', 'listening');
-      }
+      try { recognition.start(); } catch (e) { setStatus('すでに聞き取り中です。', 'listening'); }
     }
-
     function stopListening() {
       isListening = false;
       clearTimeout(silenceTimer);
       if (recognition) recognition.stop();
       setStatus('マイク停止中', '');
-      
-      // マイク停止時にテキストが残っていれば表に反映
-      if (document.getElementById('latestText').value.trim()) {
-        processTextToTable();
-      }
+      if (document.getElementById('latestText').value.trim()) processTextToTable();
     }
 
-    // テーブル操作関数群
+    // --- テーブル操作 ---
     function addManualRow() {
       const nextNum = getLastNumberInRows() + 1;
       rows.push({ number: String(nextNum), lengthCm: '', weightG: '', deformity: 'なし' });
       renderTable();
     }
-
     function renderTable() {
       const tbody = document.getElementById('tbody');
-
-      if (rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty">まだ測定データがありません</td></tr>`;
-        return;
-      }
-
+      if (rows.length === 0) return tbody.innerHTML = `<tr><td colspan="5" class="empty">まだ測定データがありません</td></tr>`;
       tbody.innerHTML = rows.map((row, index) => {
         const invalid = !isValidRow(row);
         return `
@@ -689,63 +462,40 @@
         `;
       }).join('');
     }
-
-    function updateRow(index, key, value) {
-      rows[index][key] = value;
-      renderTable();
-    }
-
-    function deleteRow(index) {
-      rows.splice(index, 1);
-      renderTable();
-    }
-
+    function updateRow(index, key, value) { rows[index][key] = value; renderTable(); }
+    function deleteRow(index) { rows.splice(index, 1); renderTable(); }
     function isValidRow(row) {
-      return String(row.number || '').trim() !== '' &&
-        isFinite(Number(row.lengthCm)) && Number(row.lengthCm) > 0 &&
-        isFinite(Number(row.weightG)) && Number(row.weightG) > 0;
+      return String(row.number || '').trim() !== '' && isFinite(Number(row.lengthCm)) && Number(row.lengthCm) > 0 && isFinite(Number(row.weightG)) && Number(row.weightG) > 0;
     }
 
+    // --- スプレッドシート保存処理 ---
     async function saveRows() {
       const measurementDate = document.getElementById('measurementDate').value;
-      const measurer = document.getElementById('measurer').value.trim();
+      const measurer = document.getElementById('measurer').value;
+      const tankName = document.getElementById('tankName').value;
 
-      if (!measurementDate || !measurer || rows.length === 0) {
-        setSaveStatus('必須項目（測定日・測定者）または測定データが足りません。', 'error');
+      if (!measurementDate || !measurer || !tankName || rows.length === 0) {
+        setSaveStatus('必須項目（測定日・測定者・水槽）を選択してください。またはデータがありません。', 'error');
         return;
       }
 
       const payload = {
-        action: 'save',
-        measurementDate,
-        measurer,
+        action: 'save', measurementDate, measurer, tankName,
         rows: rows.map(r => ({
-          number: String(r.number).trim(),
-          lengthCm: Number(r.lengthCm),
-          weightG: Number(r.weightG),
-          deformity: String(r.deformity).trim()
+          number: String(r.number).trim(), lengthCm: Number(r.lengthCm), weightG: Number(r.weightG), deformity: String(r.deformity).trim()
         }))
       };
 
       setSaveStatus('スプレッドシートへ保存中...', '');
-
       try {
         const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
+          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload)
         });
-
-        const resData = await response.json();
-
+        const resData = JSON.parse(await response.text());
         if (resData.ok) {
           setSaveStatus(`${resData.count}件のデータをスプレッドシートに登録しました！`, 'ok');
-          rows = [];
-          renderTable();
-          document.getElementById('latestText').value = '';
-        } else {
-          setSaveStatus(`保存エラー: ${resData.error}`, 'error');
-        }
+          rows = []; renderTable(); document.getElementById('latestText').value = '';
+        } else setSaveStatus(`保存エラー: ${resData.error}`, 'error');
       } catch (e) {
         setSaveStatus(`通信エラー: ${e.message}`, 'error');
       }
@@ -753,21 +503,15 @@
 
     function setStatus(message, type) {
       const el = document.getElementById('status');
-      el.textContent = message;
-      el.className = `status ${type || ''}`;
+      el.textContent = message; el.className = `status ${type || ''}`;
     }
-
     function setSaveStatus(message, type) {
       const el = document.getElementById('saveStatus');
-      el.textContent = message;
-      el.className = `status ${type || ''}`;
+      el.textContent = message; el.className = `status ${type || ''}`;
     }
-
     function escapeHtml(value) {
       return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
   </script>
-</body>
-</html>
 </body>
 </html>
