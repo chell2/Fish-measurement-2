@@ -578,12 +578,16 @@
 
     function findDeformityLevel(text) {
       const str = String(text || '').trim();
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ).*?(?:[Cсシーしー]|女子|じょし|よし|四)/i)) return 'C';
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ).*?(?:[Bｂビーびー]|美|微)/i)) return 'B';
-      if (str.match(/(?:形態異常|変形|レベル|異常|タイプ).*?(?:[Aａエーえー]|絵)/i)) return 'A';
+      
+      // 誤変換ワードも形態異常として検知する
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Cсシーしー]|女子|じょし|よし|四)/i)) return 'C';
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Bｂビーびー]|美|微)/i)) return 'B';
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Aａエーえー]|絵|へー)/i)) return 'A';
+      
       if (str.match(/(?:^|\s)(?:[Cсシーしー]|女子|じょし|よし|四)(?:\s|$)/i)) return 'C';
       if (str.match(/(?:^|\s)(?:[Bｂビーびー]|美|微)(?:\s|$)/i)) return 'B';
-      if (str.match(/(?:^|\s)(?:[Aａエーえー]|絵)(?:\s|$)/i)) return 'A';
+      if (str.match(/(?:^|\s)(?:[Aａエーえー]|絵|へー)(?:\s|$)/i)) return 'A';
+
       if (str.match(/なし|無し|無|正常/)) return 'なし';
       return 'なし';
     }
@@ -629,10 +633,13 @@
         }
         
         clearTimeout(silenceTimer);
-        // 無音判定を「2秒」に設定
+        // 見極め時間を4.5秒（4500）に延長。
+        // これでも分断された場合は、上記の修正により自動で前の行に追記されます。
         silenceTimer = setTimeout(() => {
-          if (document.getElementById('latestText').value.trim()) processTextToTable();
-        }, 2000);
+          if (document.getElementById('latestText').value.trim()) {
+            processTextToTable(true);
+          }
+        }, 4500);
       };
 
       recognition.onerror = (event) => { 
