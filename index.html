@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>魚体測定 音声入力</title>
   <style>
     body {
@@ -18,69 +18,45 @@
     }
     label { display: block; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
     
+    /* 高さの完全統一とマージンリセット */
     input, textarea, select {
       width: 100%; box-sizing: border-box; font-size: 16px;
-      border: 1px solid #d8dde8; border-radius: 10px; background: #fff;
-      margin: 0; 
+      border: 1px solid #d8dde8; border-radius: 10px; background: #fff; margin: 0;
     }
-    input, select {
-      height: 44px; padding: 0 12px; /* 高さを44pxに固定 */
-    }
-    textarea {
-      height: auto; min-height: 90px; padding: 10px 12px; resize: vertical;
-    }
+    input, select { height: 44px; padding: 0 12px; }
+    textarea { height: auto; min-height: 90px; padding: 10px 12px; resize: vertical; }
 
-    /* iOS特有の日付入力欄のはみ出しバグを強制リセット */
+    /* iOS特有の日付入力欄のはみ出しバグと上寄りを強制リセット */
     input[type="date"] {
-      -webkit-appearance: none;
-      appearance: none;
-      display: block;
-      height: 44px;
+      -webkit-appearance: none; appearance: none; display: block; height: 44px;
     }
-    
     input[type="date"]::-webkit-datetime-edit,
     input[type="date"]::-webkit-datetime-edit-fields-wrapper {
-      display: flex;
-      align-items: center;
-      height: 100%;
-      line-height: normal;
+      display: flex; align-items: center; height: 100%; line-height: normal;
     }
 
     .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-    .grid > div { min-width: 0; } /* はみ出し防止処理 */
+    .grid > div { min-width: 0; }
     
     .input-group { display: flex; width: 100%; }
     .input-group select { 
-      border-radius: 10px 0 0 10px;
-      border-right: none; 
-      flex-grow: 1; 
-      min-width: 0;
+      border-radius: 10px 0 0 10px; border-right: none; flex-grow: 1; min-width: 0;
     }
 
     .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-    
-    /* すべてのボタンの基本設定 */
     button {
       border: none; border-radius: 999px; padding: 12px 18px;
       font-size: 16px; font-weight: 700; cursor: pointer; margin: 0;
     }
-
-    /* ＋・－ボタン専用設定（基本設定を上書きして四角くする＆高さ44px固定） */
     button.del-btn {
-      border-radius: 0 !important; 
-      border: 1px solid #d8dde8 !important; 
-      border-right: none !important; 
-      background: #fff4f4; color: #d93025;
-      padding: 0 14px; font-size: 16px; font-weight: bold;
+      border-radius: 0 !important; border: 1px solid #d8dde8 !important; border-right: none !important; 
+      background: #fff4f4; color: #d93025; padding: 0 14px; font-size: 16px; font-weight: bold;
       height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
     }
     button.del-btn:active { background: #fde8e8; }
-
     button.add-btn {
-      border-radius: 0 10px 10px 0 !important; 
-      border: 1px solid #d8dde8 !important; 
-      background: #f8fafd; color: #1a73e8;
-      padding: 0 16px; font-size: 18px; font-weight: bold;
+      border-radius: 0 10px 10px 0 !important; border: 1px solid #d8dde8 !important; 
+      background: #f8fafd; color: #1a73e8; padding: 0 16px; font-size: 18px; font-weight: bold;
       height: 44px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
     }
     button.add-btn:active { background: #e8eefb; }
@@ -94,10 +70,12 @@
     .processing { color: #1a73e8; }
     .ok { color: #188038; }
     .error { color: #d93025; }
+    
     .mic-meter-wrapper { margin-top: 12px; padding: 12px; background: #f0f4f9; border-radius: 10px; }
     .mic-meter-label { font-size: 13px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; }
     .progress-container { background: #d8dde8; border-radius: 8px; height: 16px; width: 100%; overflow: hidden; }
     .progress-bar { height: 100%; width: 0%; background: #aaaaaa; transition: width 0.05s linear; }
+    
     .hint { font-size: 14px; color: #555; line-height: 1.7; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 640px; }
@@ -105,6 +83,7 @@
     th { font-size: 13px; background: #f8fafd; }
     td input, td select { padding: 8px; font-size: 15px; }
     .small-btn { padding: 8px 10px; font-size: 13px; border-radius: 8px; }
+    
     .invalid-row { background: #fff4f4; }
     .empty { color: #777; text-align: center; padding: 24px 8px; }
 
@@ -112,145 +91,127 @@
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
-      z-index: 1000;
+      z-index: 1000; visibility: hidden; opacity: 0; transition: opacity 0.2s;
     }
+    .modal-overlay.active { visibility: visible; opacity: 1; }
     .modal-content {
       background: #fff; padding: 20px; border-radius: 16px; width: 90%; max-width: 320px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.2);
     }
     .modal-content h3 { margin: 0 0 12px; font-size: 18px; }
-    .modal-content input { margin-bottom: 16px; }
+    .modal-content input, .modal-content select { margin-bottom: 16px; }
     .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; }
     .modal-buttons button { padding: 10px 16px; font-size: 14px; border-radius: 8px; }
 
-    /* ===== スマホ用の調整 ===== */
+    /* スマホ用の調整 */
     @media (max-width: 640px) {
       body { padding: 12px; } 
       .grid { grid-template-columns: 1fr; }
       h1 { font-size: 21px; } 
-      
       .buttons button { width: 100%; }
-      
-      /* スマホ時の幅調整：プルダウン 2/3、マイナス 1/6、プラス 1/6 */
-      .input-group select {
-        flex: 0 0 66.66%; 
-        width: 66.66%;
-      }
-      button.del-btn, button.add-btn {
-        flex: 0 0 16.66%; 
-        width: 16.66%;
-        padding: 0;
-      }
+      .input-group select { flex: 0 0 66.66%; width: 66.66%; }
+      button.del-btn, button.add-btn { flex: 0 0 16.66%; width: 16.66%; padding: 0; }
     }
   </style>
 </head>
 <body>
   <div class="app">
     <h1>魚体測定 音声入力</h1>
-    
-    <div class="card">
-      <div class="grid">
-        <div>
-          <label for="measurementDate">測定日</label>
-          <input type="date" id="measurementDate">
-        </div>
-        
-        <div>
-          <label for="measurer">測定者</label>
-          <div class="input-group">
-            <select id="measurer">
-              <option value="" disabled selected>読込中...</option>
-            </select>
-            <button class="del-btn" type="button" onclick="promptDeleteOption('measurer', '測定者')" title="削除">－</button>
-            <button class="add-btn" type="button" onclick="promptAddOption('measurer', '測定者')" title="新規追加">＋</button>
-          </div>
-        </div>
 
-        <div>
-          <label for="tankName">水槽</label>
-          <div class="input-group">
-            <select id="tankName">
-              <option value="" disabled selected>読込中...</option>
-            </select>
-            <button class="del-btn" type="button" onclick="promptDeleteOption('tank', '水槽')" title="削除">－</button>
-            <button class="add-btn" type="button" onclick="promptAddOption('tank', '水槽')" title="新規追加">＋</button>
-          </div>
+    <!-- 基本設定 -->
+    <div class="card grid">
+      <div>
+        <label>測定日</label>
+        <input type="date" id="measurementDate">
+      </div>
+      <div>
+        <label>測定者</label>
+        <div class="input-group">
+          <select id="measurer"><option value="">選択してください</option></select>
+          <button class="del-btn" onclick="showDeleteModal('measurer')">－</button>
+          <button class="add-btn" onclick="showAddModal('measurer')">＋</button>
         </div>
+      </div>
+      <div>
+        <label>水槽</label>
+        <div class="input-group">
+          <select id="tankName"><option value="">選択してください</option></select>
+          <button class="del-btn" onclick="showDeleteModal('tankName')">－</button>
+          <button class="add-btn" onclick="showAddModal('tankName')">＋</button>
+        </div>
+      </div>
     </div>
 
+    <!-- 音声入力 -->
     <div class="card">
       <label>音声入力</label>
-      <div class="hint">
-        話し方の例：<br>
-        「10番 13センチ 27グラム」<br>
-        「13センチ 36グラム 形態異常B」<br>
+      <p class="hint">話し方の例：「13センチ 36グラム 形態異常C、<b>次</b>」<br>※最後に「次」と言うとすぐに表に登録されます。</p>
+      
+      <div class="buttons">
+        <button class="secondary" onclick="testVolume()">🎤 音量テスト</button>
+        <button class="primary" id="startBtn" onclick="toggleMic(true)">マイク開始</button>
+        <button class="danger" id="stopBtn" onclick="toggleMic(false)" style="display:none;">マイク停止</button>
+      </div>
+
+      <div id="micMeter" class="mic-meter-wrapper" style="display:none;">
+        <div class="mic-meter-label"><span>マイク音量</span><span id="volumeText">0%</span></div>
+        <div class="progress-container">
+          <div class="progress-bar" id="volumeBar"></div>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <label>テキスト化結果</label>
+        <textarea id="latestText" placeholder="音声がここにテキスト化されます..." readonly></textarea>
+        <div id="statusMsg" class="status"></div>
       </div>
       <div class="buttons">
-        <button class="secondary" onclick="runMicTest()">🎙️ 音量テスト</button>
-        <button class="primary" onclick="startListening()">マイク開始</button>
-        <button class="danger" onclick="stopListening()">マイク停止</button>
-        <button class="secondary" onclick="processTextToTable()">📝 表に反映</button>
-        <button class="secondary" onclick="addManualRow()">手入力で追加</button>
-      </div>
-      <div class="mic-meter-wrapper">
-        <div class="mic-meter-label">
-          <span>マイク入力音量</span>
-          <span id="micVolumeValue">0 %</span>
-        </div>
-        <div class="progress-container">
-          <div id="micVolumeBar" class="progress-bar"></div>
-        </div>
-      </div>
-      <div id="status" class="status">待機中</div>
-      <div style="margin-top: 12px;">
-        <label for="latestText">テキスト化結果</label>
-        <textarea id="latestText" placeholder="ここに解析結果が表示されます。話し終えると自動的に表へ反映されます。"></textarea>
+        <button class="secondary" onclick="processTextToTable(false)">表に反映（手動）</button>
       </div>
     </div>
 
+    <!-- 測定一覧 -->
     <div class="card">
-      <label>測定一覧</label>
+      <label>測定一覧（エラー行は赤くなります）</label>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr>
-              <th style="width:100px;">ナンバー</th>
-              <th style="width:140px;">体長cm</th>
-              <th style="width:140px;">体重g</th>
-              <th style="width:130px;">変形レベル</th>
-              <th style="width:90px;">操作</th>
-            </tr>
+            <tr><th>No.</th><th>体長(cm)</th><th>体重(g)</th><th>形態異常</th><th>操作</th></tr>
           </thead>
-          <tbody id="tbody">
-            <tr><td colspan="5" class="empty">まだ測定データがありません</td></tr>
+          <tbody id="tableBody">
+            <tr><td colspan="5" class="empty">データがありません</td></tr>
           </tbody>
         </table>
       </div>
-      <button class="save" onclick="saveRows()">スプレッドシートに登録</button>
+      <div class="buttons">
+        <button class="secondary" onclick="addRow()">手入力で追加</button>
+      </div>
+      
+      <button class="save" onclick="saveRows()">スプレッドシートに保存</button>
       <div id="saveStatus" class="status"></div>
     </div>
   </div>
-  <!-- カスタムポップアップ画面 -->
-  <div id="customModal" class="modal-overlay" style="display: none;">
+
+  <!-- 追加用モーダル -->
+  <div id="addModal" class="modal-overlay">
     <div class="modal-content">
-      <h3 id="modalTitle">新しい項目を追加</h3>
-      <input type="text" id="modalInput" placeholder="名前を入力">
-      <!-- エラーメッセージ表示用 -->
-      <p id="modalError" style="color: #d93025; font-size: 13px; display: none; margin-top: -8px; margin-bottom: 12px; font-weight: bold;"></p>
+      <h3 id="addModalTitle">追加</h3>
+      <input type="text" id="addModalInput" placeholder="新しい項目を入力">
       <div class="modal-buttons">
-        <button class="secondary" onclick="closeModal()">キャンセル</button>
-        <button class="primary" onclick="submitModal()">追加する</button>
+        <button class="secondary" onclick="closeModal('addModal')">キャンセル</button>
+        <button class="primary" onclick="confirmAddModal()">追加</button>
       </div>
     </div>
   </div>
-  <!-- 削除確認用ポップアップ画面 -->
-  <div id="deleteModal" class="modal-overlay" style="display: none;">
+
+  <!-- 削除用モーダル -->
+  <div id="deleteModal" class="modal-overlay">
     <div class="modal-content">
-      <h3 id="deleteModalTitle">項目の削除</h3>
-      <p id="deleteModalText" style="margin-bottom: 20px; font-size: 15px;"></p>
+      <h3 id="deleteModalTitle">削除</h3>
+      <select id="deleteModalSelect"></select>
       <div class="modal-buttons">
-        <button class="secondary" onclick="closeDeleteModal()">キャンセル</button>
-        <button class="danger" onclick="submitDeleteModal()">削除する</button>
+        <button class="secondary" onclick="closeModal('deleteModal')">キャンセル</button>
+        <button class="danger" onclick="confirmDeleteModal()">削除</button>
       </div>
     </div>
   </div>
@@ -264,349 +225,97 @@
     // ==========================================
     // 2. アプリのメイン処理
     // ==========================================
+
+    let listData = { measurers: [], tanks: [] };
+    let currentModalTarget = '';
+
+    window.onload = () => {
+      document.getElementById('measurementDate').valueAsDate = new Date();
+      loadLists();
+      setupSpeechRecognition();
+    };
+
+    // --- リスト管理（ローカルストレージ） ---
+    function loadLists() {
+      const saved = localStorage.getItem('fishAppLists');
+      if (saved) listData = JSON.parse(saved);
+      populateSelect('measurer', listData.measurers);
+      populateSelect('tankName', listData.tanks);
+    }
+    function saveLists() {
+      localStorage.setItem('fishAppLists', JSON.stringify(listData));
+      loadLists();
+    }
+    function populateSelect(id, items) {
+      const select = document.getElementById(id);
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">選択してください</option>';
+      items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item; opt.textContent = item;
+        select.appendChild(opt);
+      });
+      if (items.includes(currentVal)) select.value = currentVal;
+    }
+
+    // --- モーダル操作 ---
+    function showAddModal(target) {
+      currentModalTarget = target;
+      document.getElementById('addModalTitle').textContent = target === 'measurer' ? '測定者の追加' : '水槽の追加';
+      document.getElementById('addModalInput').value = '';
+      document.getElementById('addModal').classList.add('active');
+    }
+    function confirmAddModal() {
+      const val = document.getElementById('addModalInput').value.trim();
+      if (!val) return;
+      const targetArr = currentModalTarget === 'measurer' ? listData.measurers : listData.tanks;
+      if (!targetArr.includes(val)) {
+        targetArr.push(val);
+        saveLists();
+      }
+      closeModal('addModal');
+    }
+    function showDeleteModal(target) {
+      currentModalTarget = target;
+      document.getElementById('deleteModalTitle').textContent = target === 'measurer' ? '測定者の削除' : '水槽の削除';
+      const select = document.getElementById('deleteModalSelect');
+      select.innerHTML = '';
+      const items = target === 'measurer' ? listData.measurers : listData.tanks;
+      items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item; opt.textContent = item;
+        select.appendChild(opt);
+      });
+      document.getElementById('deleteModal').classList.add('active');
+    }
+    function confirmDeleteModal() {
+      const val = document.getElementById('deleteModalSelect').value;
+      if (!val) return;
+      if (currentModalTarget === 'measurer') {
+        listData.measurers = listData.measurers.filter(i => i !== val);
+      } else {
+        listData.tanks = listData.tanks.filter(i => i !== val);
+      }
+      saveLists();
+      closeModal('deleteModal');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    // --- 音声入力 ＆ 解析システム ---
     let recognition = null;
     let isListening = false;
     let rows = [];
     let silenceTimer = null;
-    let audioCtx = null;
-    let analyser = null;
-    let micStream = null;
-    let animFrameId = null;
+    let textBeforeSession = '';
     
-    let textBeforeSession = ''; // 過去の会話を記憶する変数
+    // 音量テスト関連
+    let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
 
-    window.addEventListener('DOMContentLoaded', () => {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
-      
-      renderTable();
-      setupSpeechRecognition();
-
-      // 起動時にスプレッドシートからリストを読み込む
-      loadOptionsFromServer();
-    });
-
-    // --- ドロップダウンリスト管理処理 ---
-    async function loadOptionsFromServer() {
-      try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'getOptions' })
-        });
-        const data = await response.json();
-        
-        if (data.ok) {
-          updateSelectOptions('measurer', data.measurers, '測定者を選択');
-          updateSelectOptions('tankName', data.tanks, '水槽を選択');
-        } else {
-          console.error("リスト読み込みエラー: ", data.error);
-        }
-      } catch (err) {
-        console.error("通信エラー: ", err);
-      }
-    }
-
-    function updateSelectOptions(elementId, items, placeholder) {
-      const select = document.getElementById(elementId);
-      select.innerHTML = `<option value="" disabled selected>${placeholder}</option>`;
-      items.forEach(item => {
-        const option = document.createElement('option');
-        option.value = item;
-        option.textContent = item;
-        select.appendChild(option);
-      });
-    }
-
-    let currentModalType = '';
-    let currentModalLabel = '';
-
-    function promptAddOption(type, label) {
-      currentModalType = type;
-      currentModalLabel = label;
-      document.getElementById('modalTitle').textContent = `新しい${label}を追加`;
-      document.getElementById('modalInput').value = '';
-      document.getElementById('modalError').style.display = 'none'; // エラー表示をリセット
-      document.getElementById('customModal').style.display = 'flex';
-      document.getElementById('modalInput').focus();
-    }
-
-    function closeModal() {
-      document.getElementById('customModal').style.display = 'none';
-    }
-
-    async function submitModal() {
-      const newVal = document.getElementById('modalInput').value.trim();
-      const errorEl = document.getElementById('modalError');
-      
-      // 空欄チェック
-      if (!newVal) {
-        errorEl.textContent = '名前を入力してください。';
-        errorEl.style.display = 'block';
-        return;
-      }
-      
-      // 重複チェック
-      const selectId = currentModalType === 'measurer' ? 'measurer' : 'tankName';
-      const selectElement = document.getElementById(selectId);
-      
-      // 現在のプルダウンにある選択肢（文字列）をすべて取得して配列にする
-      const existingValues = Array.from(selectElement.options).map(opt => opt.value);
-      
-      if (existingValues.includes(newVal)) {
-        // 重複している場合はエラーを出して処理を中断する（ダイアログは閉じない）
-        errorEl.textContent = `「${newVal}」は既に存在します。別の名前を入力してください。`;
-        errorEl.style.display = 'block';
-        return;
-      }
-      
-      // 問題なければポップアップを閉じて追加処理へ進む
-      closeModal(); 
-      
-      selectElement.innerHTML = `<option value="" disabled selected>保存中...</option>`;
-      
-      try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'addOption', type: currentModalType, value: newVal })
-        });
-        const data = await response.json();
-        
-        if (data.ok) {
-          await loadOptionsFromServer();
-          document.getElementById(currentModalType === 'measurer' ? 'measurer' : 'tankName').value = data.value;
-        } else {
-          // 通信エラーなどのシステムエラー時
-          alert('追加に失敗しました: ' + data.error);
-          await loadOptionsFromServer();
-        }
-      } catch (err) {
-        alert('通信エラーが発生しました。');
-        await loadOptionsFromServer();
-      }
-    }
-
-    // --- 削除ポップアップ用処理 ---
-    let targetDeleteType = '';
-    let targetDeleteValue = '';
-
-    function promptDeleteOption(type, label) {
-      const selectId = type === 'measurer' ? 'measurer' : 'tankName';
-      const selectElement = document.getElementById(selectId);
-      const selectedValue = selectElement.value;
-
-      if (!selectedValue) return; // 選択されていない場合は何もしない
-
-      targetDeleteType = type;
-      targetDeleteValue = selectedValue;
-
-      document.getElementById('deleteModalText').textContent = `${label}「${selectedValue}」をリストから完全に削除しますか？`;
-      document.getElementById('deleteModal').style.display = 'flex';
-    }
-
-    function closeDeleteModal() {
-      document.getElementById('deleteModal').style.display = 'none';
-    }
-
-    async function submitDeleteModal() {
-      closeDeleteModal();
-      
-      const selectElement = document.getElementById(targetDeleteType === 'measurer' ? 'measurer' : 'tankName');
-      selectElement.innerHTML = `<option value="" disabled selected>削除中...</option>`;
-      
-      try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'deleteOption', type: targetDeleteType, value: targetDeleteValue })
-        });
-        const data = await response.json();
-        
-        if (data.ok) {
-          await loadOptionsFromServer(); // 削除後にリストを再読み込み
-        } else {
-          alert('削除に失敗しました: ' + data.error);
-          await loadOptionsFromServer();
-        }
-      } catch (err) {
-        alert('通信エラーが発生しました。');
-        await loadOptionsFromServer();
-      }
-    }
-
-    // --- 音量メーター処理 ---
-    async function startVolumeMeter() {
-      try {
-        stopVolumeMeter();
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 512;
-        analyser.smoothingTimeConstant = 0.3;
-        const source = audioCtx.createMediaStreamSource(micStream);
-        source.connect(analyser);
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const bar = document.getElementById('micVolumeBar');
-        const valText = document.getElementById('micVolumeValue');
-        function update() {
-          if (!analyser) return;
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i] * dataArray[i];
-          let rms = Math.sqrt(sum / dataArray.length);
-          let level = Math.min(100, Math.round((rms / 128) * 100 * 2.2));
-          bar.style.width = level + '%';
-          valText.textContent = level + ' %';
-          if (level > 75) bar.style.background = '#d93025';
-          else if (level > 3) bar.style.background = '#188038';
-          else bar.style.background = '#aaaaaa';
-          animFrameId = requestAnimationFrame(update);
-        }
-        update();
-        return true;
-      } catch (err) {
-        setStatus(`マイクアクセスエラー: ブラウザでマイクがブロックされていないか確認してください。（${err.message}）`, 'error');
-        return false;
-      }
-    }
-
-    function stopVolumeMeter() {
-      if (animFrameId) cancelAnimationFrame(animFrameId);
-      animFrameId = null;
-      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-      if (audioCtx) { audioCtx.close(); audioCtx = null; }
-      analyser = null;
-      document.getElementById('micVolumeBar').style.width = '0%';
-      document.getElementById('micVolumeBar').style.background = '#aaaaaa';
-      document.getElementById('micVolumeValue').textContent = '0 %';
-    }
-
-    async function runMicTest() {
-      if (isListening) stopListening();
-      setStatus('マイク音量テスト中（5秒間）... マイクに向かって声を出してください。', 'processing');
-      let maxLevelDetected = 0;
-      const ok = await startVolumeMeter();
-      if (!ok) return;
-      const checkInterval = setInterval(() => {
-        const currentLevel = parseInt(document.getElementById('micVolumeValue').textContent, 10) || 0;
-        if (currentLevel > maxLevelDetected) maxLevelDetected = currentLevel;
-      }, 100);
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        stopVolumeMeter();
-        if (maxLevelDetected > 3) setStatus(`テスト完了：正常に検知しました（最大音量: ${maxLevelDetected}%）`, 'ok');
-        else setStatus('テスト完了：音量が検知されませんでした。設定を見直してください。', 'error');
-      }, 5000);
-    }
-
-    // --- テキスト解析 ＆ テーブル反映処理 ---
-    function processTextToTable() {
-      const text = document.getElementById('latestText').value.trim();
-      if (!text) return setStatus('テキストエリアに音声結果が入っていません。', 'error');
-      
-      const parsedRows = parseSpeechText(text);
-      if (parsedRows.length > 0) {
-        rows.push(...parsedRows);
-        renderTable();
-        setStatus(`${parsedRows.length} 件の測定データを表に追加しました。`, 'ok');
-        
-        document.getElementById('latestText').value = '';
-        textBeforeSession = '';
-        if (isListening && recognition) recognition.stop(); 
-      } else {
-        // 数値がないが「形態異常」だけ聞き取れた場合、直前のデータを上書き更新する
-        const def = findDeformityLevel(text);
-        if (def !== 'なし' && rows.length > 0) {
-           rows[rows.length - 1].deformity = def;
-           renderTable();
-           setStatus(`前のデータに形態異常「${def}」を追記しました。`, 'ok');
-           document.getElementById('latestText').value = '';
-           textBeforeSession = '';
-        } else {
-           setStatus('数値データ（体長・体重など）を読み取れませんでした。', 'error');
-        }
-      }
-    }
-
-    function parseSpeechText(text) {
-      const normalized = normalizeText(text);
-      const textWithoutPunctuation = normalized.replace(/[。、！？]/g, ' ');
-      let rawChunks = textWithoutPunctuation.replace(/(\d+)\s*(?:番|ばん)/g, '\n$1番 ').replace(/次|つぎ/g, '\n').split('\n').map(s => s.trim()).filter(Boolean);
-      const parsed = [];
-      rawChunks.forEach(chunk => {
-        const parsedRows = parseOneChunk(chunk);
-        if (parsedRows && parsedRows.length > 0) parsed.push(...parsedRows);
-      });
-      return parsed;
-    }
-
-    function parseOneChunk(chunk) {
-      let number = null;
-      const numberMatch = chunk.match(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/);
-      if (numberMatch) number = numberMatch[1];
-      let bodyText = chunk.replace(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/g, '').trim();
-      const nums = bodyText.match(/[0-9]+(?:\.[0-9]+)?/g) || [];
-      if (nums.length < 2) return null;
-      let deformity = findDeformityLevel(chunk);
-      const results = [];
-      for (let i = 0; i < nums.length - 1; i += 2) {
-        const lengthCm = Number(nums[i]);
-        const weightG = Number(nums[i + 1]);
-        if (isFinite(lengthCm) && isFinite(weightG)) {
-          results.push({
-            number: number || String(getLastNumberInRows() + results.length + 1),
-            lengthCm, weightG, deformity: deformity || 'なし'
-          });
-        }
-      }
-      return results;
-    }
-
-    function normalizeText(text) {
-      let str = String(text || '');
-      const kansujiMap = {'一':'1','二':'2','三':'3','四':'4','五':'5','六':'6','七':'7','八':'8','九':'9'};
-      str = str.replace(/([二三四五六七八九])十([一二三四五六七八九])/g, (m, a, b) => kansujiMap[a] + kansujiMap[b]);
-      str = str.replace(/([二三四五六七八九])十/g, (m, a) => kansujiMap[a] + '0');
-      str = str.replace(/十([一二三四五六七八九])/g, (m, a) => '1' + kansujiMap[a]);
-      str = str.replace(/十/g, '10');
-      str = str.replace(/[〇一二三四五六七八九]/g, m => (kansujiMap[m] || '0'));
-      return str.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-        .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-        .replace(/．/g, '.').replace(/点/g, '.')
-        .replace(/センチメートル|センチ|cm|ミリメートル|ミリ|mm/gi, ' ')
-        .replace(/キログラム|キロ|グラム|g|kg/gi, ' ')
-        .replace(/\s+/g, ' ').trim();
-    }
-
-    function findDeformityLevel(text) {
-      const str = String(text || '').trim();
-      
-      // 「異常」「以上」「形態」「携帯」などのキーワードと、A/B/Cの音がセットの場合のみ検知する
-      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Cｃсシーしー]|女子|じょし|よし|四)/i)) return 'C';
-      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Bｂビーびー]|美|微)/i)) return 'B';
-      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Aａエーえー]|絵|へ|で)/i)) return 'A';
-
-      if (str.match(/なし|無し|無|正常/)) return 'なし';
-      return 'なし';
-    }
-
-    function getLastNumberInRows() {
-      if (rows.length === 0) return 0;
-      return rows.reduce((max, row) => {
-        const n = Number(row.number);
-        return isFinite(n) && n > max ? n : max;
-      }, 0);
-    }
-
-    // --- リアルタイムマイク ---
     function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return setStatus('このブラウザはリアルタイム音声入力に対応していません。', 'error');
+      if (!SpeechRecognition) return setStatus('このブラウザは音声入力非対応です。', 'error');
       
       recognition = new SpeechRecognition();
       recognition.lang = 'ja-JP'; 
@@ -615,7 +324,7 @@
 
       recognition.onstart = () => {
         textBeforeSession = document.getElementById('latestText').value.trim();
-        setStatus('マイク聞き取り中... 測定値を話してください。', 'listening');
+        setStatus('マイク聞き取り中...', 'listening');
       };
 
       recognition.onresult = (event) => {
@@ -623,104 +332,212 @@
         let interim = '';
         
         for (let i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            currentSessionFinal += event.results[i][0].transcript + ' ';
-          } else {
-            interim += event.results[i][0].transcript;
-          }
+          if (event.results[i].isFinal) currentSessionFinal += event.results[i][0].transcript + ' ';
+          else interim += event.results[i][0].transcript;
         }
         
         let newText = textBeforeSession;
         if (newText && (currentSessionFinal || interim)) newText += ' ';
         newText += currentSessionFinal + interim;
         
-        // 「次」という言葉が含まれていたら即時処理！
+        // 「次」キーワードで即時反映
         if (newText.match(/次|つぎ/)) {
-          // 「次」という言葉だけを消して、即座に表へ反映
           newText = newText.replace(/次|つぎ/g, ' ').trim();
           document.getElementById('latestText').value = newText;
           clearTimeout(silenceTimer);
-          processTextToTable(false); // タイマーを待たずに0秒で即時実行
-          return; // ここで処理を終わらせる
+          processTextToTable(false); 
+          return; 
         }
         
         document.getElementById('latestText').value = newText.trim();
         
         clearTimeout(silenceTimer);
-        // 「次」と言わなかった時のための保険のタイマー（3秒に短縮）
+        // 無言が3秒続いたら自動処理（データが欠けていても表に出す）
         silenceTimer = setTimeout(() => {
-          if (document.getElementById('latestText').value.trim()) {
-            processTextToTable(true);
-          }
+          if (document.getElementById('latestText').value.trim()) processTextToTable(true);
         }, 3000); 
       };
 
-      recognition.onerror = (event) => { 
-        if (event.error !== 'no-speech') setStatus(`音声認識エラー: ${event.error}`, 'error'); 
+      recognition.onerror = (e) => { 
+        if (e.error !== 'no-speech') setStatus(`音声認識エラー: ${e.error}`, 'error'); 
       };
-
       recognition.onend = () => {
         if (isListening) try { recognition.start(); } catch (e) {}
         else setStatus('マイク停止中', '');
       };
     }
-    function startListening() {
-      stopVolumeMeter();
-      if (!recognition) setupSpeechRecognition();
-      isListening = true;
-      try { recognition.start(); } catch (e) { setStatus('すでに聞き取り中です。', 'listening'); }
-    }
-    function stopListening() {
-      isListening = false;
-      clearTimeout(silenceTimer);
-      if (recognition) recognition.stop();
-      setStatus('マイク停止中', '');
-      if (document.getElementById('latestText').value.trim()) processTextToTable();
+
+    function toggleMic(start) {
+      if (!recognition) return;
+      isListening = start;
+      document.getElementById('startBtn').style.display = start ? 'none' : 'block';
+      document.getElementById('stopBtn').style.display = start ? 'block' : 'none';
+      if (start) {
+        document.getElementById('latestText').value = '';
+        textBeforeSession = '';
+        recognition.start();
+      } else {
+        recognition.stop();
+      }
     }
 
-    // --- テーブル操作 ---
-    function addManualRow() {
-      const nextNum = getLastNumberInRows() + 1;
-      rows.push({ number: String(nextNum), lengthCm: '', weightG: '', deformity: 'なし' });
+    function setStatus(msg, type) {
+      const el = document.getElementById('statusMsg');
+      el.textContent = msg;
+      el.className = 'status ' + type;
+    }
+
+    function processTextToTable(isAuto = false) {
+      const text = document.getElementById('latestText').value.trim();
+      if (!text) return;
+      
+      const parsedRows = parseSpeechText(text);
+      if (parsedRows.length > 0) {
+        rows.push(...parsedRows);
+        renderTable();
+        setStatus(`${parsedRows.length} 件を表に追加しました。（未入力部分は赤くなります）`, 'ok');
+        
+        document.getElementById('latestText').value = '';
+        textBeforeSession = '';
+        if (isListening && recognition) recognition.stop(); // マイクの記憶をリセット
+      } else {
+        if (!isAuto) setStatus('データ（体長・体重など）を読み取れませんでした。', 'error');
+        else setStatus('入力中...（続きを話してください）', 'processing');
+      }
+    }
+
+    // --- テキスト解析・正規化 ---
+    function normalizeText(text) {
+      let str = String(text || '');
+      const kansujiMap = {'一':'1','二':'2','三':'3','四':'4','五':'5','六':'6','七':'7','八':'8','九':'9'};
+      str = str.replace(/([二三四五六七八九])十([一二三四五六七八九])/g, (m, a, b) => kansujiMap[a] + kansujiMap[b]);
+      str = str.replace(/([二三四五六七八九])十/g, (m, a) => kansujiMap[a] + '0');
+      str = str.replace(/十([一二三四五六七八九])/g, (m, a) => '1' + kansujiMap[a]);
+      str = str.replace(/十/g, '10');
+      str = str.replace(/[〇一二三四五六七八九]/g, m => (kansujiMap[m] || '0'));
+      
+      return str.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/[Ａ-Ｚａ-ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+        .replace(/．/g, '.').replace(/点/g, '.')
+        .replace(/センチメートル|センチ/gi, 'cm')
+        .replace(/キログラム|キロ|グラム/gi, 'g')
+        .replace(/\s+/g, ' ').trim();
+    }
+
+    function findDeformityLevel(text) {
+      const str = String(text || '').trim();
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Cｃсシーしー]|女子|じょし|よし|四)/i)) return 'C';
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Bｂビーびー]|美|微)/i)) return 'B';
+      if (str.match(/(?:形態|携帯|変形|レベル|異常|以上|タイプ).*?(?:[Aａエーえー]|絵|へ|で)/i)) return 'A';
+      if (str.match(/なし|無し|無|正常/)) return 'なし';
+      return 'なし';
+    }
+
+    function parseOneChunk(chunk) {
+      let number = null;
+      const numberMatch = chunk.match(/(\d+)\s*(?:番|ばん|ナンバー|no|No|NO)/i);
+      if (numberMatch) number = numberMatch[1];
+      
+      const lengthMatch = chunk.match(/([0-9]+(?:\.[0-9]+)?)\s*cm/i);
+      const weightMatch = chunk.match(/([0-9]+(?:\.[0-9]+)?)\s*g/i);
+      let deformity = findDeformityLevel(chunk);
+      
+      // どれか1つでもあれば表に追加（欠損を許容）
+      if (!lengthMatch && !weightMatch && deformity === 'なし') return null;
+      
+      const lengthCm = lengthMatch ? Number(lengthMatch[1]) : '';
+      const weightG = weightMatch ? Number(weightMatch[1]) : '';
+      
+      return [{
+        number: number || String(getLastNumberInRows() + 1),
+        lengthCm: lengthCm, 
+        weightG: weightG, 
+        deformity: deformity || 'なし'
+      }];
+    }
+
+    function parseSpeechText(text) {
+      const normalized = normalizeText(text);
+      const chunks = normalized.split(/(?=\d+\s*(?:番|ばん|ナンバー|no|No|NO))/i);
+      const results = [];
+      chunks.forEach(chunk => {
+        if (!chunk.trim()) return;
+        const parsed = parseOneChunk(chunk);
+        if (parsed) results.push(...parsed);
+      });
+      return results;
+    }
+
+    function getLastNumberInRows() {
+      if (rows.length === 0) return 0;
+      const nums = rows.map(r => Number(r.number)).filter(n => !isNaN(n));
+      return nums.length > 0 ? Math.max(...nums) : 0;
+    }
+
+    // --- テーブル操作 ＆ エラー判定 ---
+    function isValidRow(row) {
+      return String(row.number || '').trim() !== '' && 
+             row.lengthCm !== '' && isFinite(Number(row.lengthCm)) && Number(row.lengthCm) > 0 && 
+             row.weightG !== '' && isFinite(Number(row.weightG)) && Number(row.weightG) > 0;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">データがありません</td></tr>';
+        return;
+      }
+      rows.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        // エラー行は背景を赤くする
+        if (!isValidRow(row)) tr.className = 'invalid-row';
+
+        tr.innerHTML = `
+          <td><input type="text" value="${row.number}" onchange="updateRow(${index}, 'number', this.value)" style="width:60px; text-align:center;"></td>
+          <td><input type="number" step="0.1" value="${row.lengthCm}" onchange="updateRow(${index}, 'lengthCm', this.value)" style="width:70px; text-align:right;"></td>
+          <td><input type="number" step="0.1" value="${row.weightG}" onchange="updateRow(${index}, 'weightG', this.value)" style="width:70px; text-align:right;"></td>
+          <td>
+            <select onchange="updateRow(${index}, 'deformity', this.value)" style="width:80px;">
+              <option value="なし" ${row.deformity === 'なし' ? 'selected' : ''}>なし</option>
+              <option value="A" ${row.deformity === 'A' ? 'selected' : ''}>A</option>
+              <option value="B" ${row.deformity === 'B' ? 'selected' : ''}>B</option>
+              <option value="C" ${row.deformity === 'C' ? 'selected' : ''}>C</option>
+            </select>
+          </td>
+          <td><button class="small-btn danger" onclick="deleteRow(${index})">削除</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateRow(index, field, value) {
+      rows[index][field] = value;
+      renderTable(); // 修正したら赤色判定を更新
+    }
+    function deleteRow(index) {
+      rows.splice(index, 1);
       renderTable();
     }
-    function renderTable() {
-      const tbody = document.getElementById('tbody');
-      if (rows.length === 0) return tbody.innerHTML = `<tr><td colspan="5" class="empty">まだ測定データがありません</td></tr>`;
-      tbody.innerHTML = rows.map((row, index) => {
-        const invalid = !isValidRow(row);
-        return `
-          <tr class="${invalid ? 'invalid-row' : ''}">
-            <td><input type="text" value="${escapeHtml(row.number)}" onchange="updateRow(${index}, 'number', this.value)"></td>
-            <td><input type="number" step="0.1" value="${escapeHtml(row.lengthCm)}" onchange="updateRow(${index}, 'lengthCm', this.value)"></td>
-            <td><input type="number" step="0.1" value="${escapeHtml(row.weightG)}" onchange="updateRow(${index}, 'weightG', this.value)"></td>
-            <td>
-              <select onchange="updateRow(${index}, 'deformity', this.value)">
-                <option value="なし" ${row.deformity === 'なし' ? 'selected' : ''}>なし</option>
-                <option value="A" ${row.deformity === 'A' ? 'selected' : ''}>A</option>
-                <option value="B" ${row.deformity === 'B' ? 'selected' : ''}>B</option>
-                <option value="C" ${row.deformity === 'C' ? 'selected' : ''}>C</option>
-              </select>
-            </td>
-            <td><button class="danger small-btn" onclick="deleteRow(${index})">削除</button></td>
-          </tr>
-        `;
-      }).join('');
-    }
-    function updateRow(index, key, value) { rows[index][key] = value; renderTable(); }
-    function deleteRow(index) { rows.splice(index, 1); renderTable(); }
-    function isValidRow(row) {
-      return String(row.number || '').trim() !== '' && isFinite(Number(row.lengthCm)) && Number(row.lengthCm) > 0 && isFinite(Number(row.weightG)) && Number(row.weightG) > 0;
+    function addRow() {
+      rows.push({ number: String(getLastNumberInRows() + 1), lengthCm: '', weightG: '', deformity: 'なし' });
+      renderTable();
     }
 
-    // --- スプレッドシート保存処理 ---
+    // --- スプレッドシートへ保存 ---
     async function saveRows() {
       const measurementDate = document.getElementById('measurementDate').value;
       const measurer = document.getElementById('measurer').value;
       const tankName = document.getElementById('tankName').value;
 
       if (!measurementDate || !measurer || !tankName || rows.length === 0) {
-        setSaveStatus('必須項目（測定日・測定者・水槽）を選択してください。またはデータがありません。', 'error');
+        setSaveStatus('必須項目（測定日・測定者・水槽）を選択してください。', 'error');
+        return;
+      }
+      
+      // 赤いエラー行があれば保存ブロック
+      if (rows.some(row => !isValidRow(row))) {
+        setSaveStatus('未入力やエラーの行（赤色）があります。数値を手入力するか、削除してください。', 'error');
         return;
       }
 
@@ -740,22 +557,60 @@
         if (resData.ok) {
           setSaveStatus(`${resData.count}件のデータをスプレッドシートに登録しました！`, 'ok');
           rows = []; renderTable(); document.getElementById('latestText').value = '';
-        } else setSaveStatus(`保存エラー: ${resData.error}`, 'error');
+        } else {
+          setSaveStatus(`保存エラー: ${resData.error}`, 'error');
+        }
       } catch (e) {
         setSaveStatus(`通信エラー: ${e.message}`, 'error');
       }
     }
 
-    function setStatus(message, type) {
-      const el = document.getElementById('status');
-      el.textContent = message; el.className = `status ${type || ''}`;
-    }
-    function setSaveStatus(message, type) {
+    function setSaveStatus(msg, type) {
       const el = document.getElementById('saveStatus');
-      el.textContent = message; el.className = `status ${type || ''}`;
+      el.textContent = msg;
+      el.className = 'status ' + type;
     }
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // --- マイク音量テスト ---
+    async function testVolume() {
+      if (micStream) return;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        const source = audioCtx.createMediaStreamSource(micStream);
+        source.connect(analyser);
+        analyser.fftSize = 256;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        document.getElementById('micMeter').style.display = 'block';
+        
+        const updateMeter = () => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          const avg = sum / dataArray.length;
+          const percent = Math.min(100, Math.round((avg / 128) * 100));
+          
+          const bar = document.getElementById('volumeBar');
+          bar.style.width = percent + '%';
+          bar.style.backgroundColor = percent > 50 ? '#188038' : '#aaaaaa';
+          document.getElementById('volumeText').textContent = percent + '%';
+          
+          animFrameId = requestAnimationFrame(updateMeter);
+        };
+        updateMeter();
+        
+        setTimeout(() => {
+          cancelAnimationFrame(animFrameId);
+          micStream.getTracks().forEach(track => track.stop());
+          micStream = null;
+          if (audioCtx) { audioCtx.close(); audioCtx = null; }
+          document.getElementById('micMeter').style.display = 'none';
+        }, 5000);
+      } catch (e) {
+        alert('マイクにアクセスできませんでした。');
+      }
     }
   </script>
 </body>
