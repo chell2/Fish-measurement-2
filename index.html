@@ -32,11 +32,18 @@
 
     /* iOS特有の日付入力欄のはみ出しバグを強制リセット */
     input[type="date"] {
-      display: inline-flex;
-      align-items: center;
       -webkit-appearance: none;
       appearance: none;
       display: block;
+      height: 44px;
+    }
+    
+    input[type="date"]::-webkit-datetime-edit,
+    input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      line-height: normal;
     }
 
     .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
