@@ -24,7 +24,6 @@
     textarea { min-height: 90px; resize: vertical; }
     .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     
-    /* ＋・－ボタン付きのインプットグループ用スタイル */
     .input-group { display: flex; width: 100%; }
     .input-group select { 
       border-radius: 10px 0 0 10px;
@@ -32,27 +31,33 @@
       flex-grow: 1; 
       min-width: 0;
     }
-    .del-btn {
-      border-radius: 0 !important;
-      border: 1px solid #d8dde8; 
-      border-right: none; 
-      background: #fff4f4; color: #d93025;
-      padding: 0 14px; font-size: 16px; font-weight: bold; cursor: pointer;
-    }
-    .del-btn:active { background: #fde8e8; }
-    .add-btn {
-      border-radius: 0 10px 10px 0 !important;
-      border: 1px solid #d8dde8; 
-      background: #f8fafd; color: #1a73e8;
-      padding: 0 16px; font-size: 18px; font-weight: bold; cursor: pointer;
-    }
-    .add-btn:active { background: #e8eefb; }
 
     .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    
+    /* すべてのボタンの基本設定（丸くする） */
     button {
       border: none; border-radius: 999px; padding: 12px 18px;
       font-size: 16px; font-weight: 700; cursor: pointer;
     }
+
+    /* ＋・－ボタン専用設定（基本設定を上書きして四角くする） */
+    button.del-btn {
+      border-radius: 0 !important; /* マイナスボタンの両端をまっすぐに */
+      border: 1px solid #d8dde8 !important; 
+      border-right: none !important; 
+      background: #fff4f4; color: #d93025;
+      padding: 0 14px; font-size: 16px; font-weight: bold;
+    }
+    button.del-btn:active { background: #fde8e8; }
+
+    button.add-btn {
+      border-radius: 0 10px 10px 0 !important; /* プラスボタンは右側だけ丸く */
+      border: 1px solid #d8dde8 !important; 
+      background: #f8fafd; color: #1a73e8;
+      padding: 0 16px; font-size: 18px; font-weight: bold;
+    }
+    button.add-btn:active { background: #e8eefb; }
+
     .primary { background: #1a73e8; color: #fff; }
     .danger { background: #d93025; color: #fff; }
     .secondary { background: #e8eefb; color: #1a3d7c; }
@@ -97,10 +102,7 @@
       .grid { grid-template-columns: 1fr; }
       h1 { font-size: 21px; } 
       
-      /* 入力グループ（＋－）以外の操作ボタンのみ横幅100%にする */
       .buttons button { width: 100%; }
-      
-      /* 測定日のはみ出し防止 */
       input[type="date"] { max-width: 100%; box-sizing: border-box; }
       
       /* スマホ時の幅調整：プルダウン 2/3、マイナス 1/6、プラス 1/6 */
@@ -108,7 +110,7 @@
         flex: 0 0 66.66%; 
         width: 66.66%;
       }
-      .del-btn, .add-btn {
+      button.del-btn, button.add-btn {
         flex: 0 0 16.66%; 
         width: 16.66%;
         padding: 0;
