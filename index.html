@@ -264,10 +264,11 @@
       if (!val) return;
       closeModal('addModal');
       const gasType = currentModalTarget === 'measurer' ? 'measurer' : 'tank';
+      const label = currentModalTarget === 'measurer' ? '担当者' : '水槽';
       try {
         await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'addOption', type: gasType, value: val }) });
         loadLists();
-        setStatus(`「${val}」を追加しました。`, 'ok');
+        setStatus(`${label}に「${val}」を追加しました。`, 'ok');
       } catch (e) { setStatus('項目の追加に失敗しました。', 'error'); }
     }
     
@@ -290,10 +291,11 @@
       if (!val) return;
       closeModal('deleteModal');
       const gasType = currentModalTarget === 'measurer' ? 'measurer' : 'tank';
+      const label = currentModalTarget === 'measurer' ? '担当者' : '水槽';
       try {
         await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'deleteOption', type: gasType, value: val }) });
         loadLists();
-        setStatus(`「${val}」を削除しました。`, 'ok');
+        setStatus(`${label}から「${val}」を削除しました。`, 'ok');
       } catch (e) { setStatus('項目の削除に失敗しました。', 'error'); }
     }
     
