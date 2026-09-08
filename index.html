@@ -18,7 +18,6 @@
     }
     label { display: block; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
     
-    /* 高さの完全統一とマージンリセット */
     input, textarea, select {
       width: 100%; box-sizing: border-box; font-size: 16px;
       border: 1px solid #d8dde8; border-radius: 10px; background: #fff; margin: 0;
@@ -26,7 +25,6 @@
     input, select { height: 44px; padding: 0 12px; }
     textarea { height: auto; min-height: 90px; padding: 10px 12px; resize: vertical; }
 
-    /* iOS特有の日付入力欄のはみ出しバグと上寄りを強制リセット */
     input[type="date"] {
       -webkit-appearance: none; appearance: none; display: block; height: 44px;
     }
@@ -71,11 +69,6 @@
     .ok { color: #188038; }
     .error { color: #d93025; }
     
-    .mic-meter-wrapper { margin-top: 12px; padding: 12px; background: #f0f4f9; border-radius: 10px; }
-    .mic-meter-label { font-size: 13px; font-weight: 700; margin-bottom: 6px; display: flex; justify-content: space-between; }
-    .progress-container { background: #d8dde8; border-radius: 8px; height: 16px; width: 100%; overflow: hidden; }
-    .progress-bar { height: 100%; width: 0%; background: #aaaaaa; transition: width 0.05s linear; }
-    
     .hint { font-size: 14px; color: #555; line-height: 1.7; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 640px; }
@@ -87,7 +80,6 @@
     .invalid-row { background: #fff4f4; }
     .empty { color: #777; text-align: center; padding: 24px 8px; }
 
-    /* カスタムポップアップ用 */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
@@ -103,7 +95,6 @@
     .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; }
     .modal-buttons button { padding: 10px 16px; font-size: 14px; border-radius: 8px; }
 
-    /* スマホ用の調整 */
     @media (max-width: 640px) {
       body { padding: 12px; } 
       .grid { grid-template-columns: 1fr; }
@@ -118,7 +109,6 @@
   <div class="app">
     <h1>魚体測定 音声入力</h1>
 
-    <!-- 基本設定 -->
     <div class="card grid">
       <div>
         <label>測定日</label>
@@ -142,22 +132,13 @@
       </div>
     </div>
 
-    <!-- 音声入力 -->
     <div class="card">
       <label>音声入力</label>
-      <p class="hint">話し方の例：「13センチ 36グラム 形態異常C、<b>次</b>」<br>※最後に「次」と言うとすぐに表に登録されます。</p>
+      <p class="hint">話し方の例：「13センチ 36グラム 形態異常C、<b>次</b>」</p>
       
       <div class="buttons">
-        <button class="secondary" onclick="testVolume()">🎤 音量テスト</button>
         <button class="primary" id="startBtn" onclick="toggleMic(true)">マイク開始</button>
         <button class="danger" id="stopBtn" onclick="toggleMic(false)" style="display:none;">マイク停止</button>
-      </div>
-
-      <div id="micMeter" class="mic-meter-wrapper" style="display:none;">
-        <div class="mic-meter-label"><span>マイク音量</span><span id="volumeText">0%</span></div>
-        <div class="progress-container">
-          <div class="progress-bar" id="volumeBar"></div>
-        </div>
       </div>
 
       <div style="margin-top: 16px;">
@@ -166,11 +147,10 @@
         <div id="statusMsg" class="status"></div>
       </div>
       <div class="buttons">
-        <button class="secondary" onclick="processTextToTable(false)">表に反映（手動）</button>
+        <button class="secondary" onclick="manualProcess()">表に反映（手動）</button>
       </div>
     </div>
 
-    <!-- 測定一覧 -->
     <div class="card">
       <label>測定一覧（エラー行は赤くなります）</label>
       <div class="table-wrap">
@@ -187,12 +167,12 @@
         <button class="secondary" onclick="addRow()">手入力で追加</button>
       </div>
       
-      <button class="save" onclick="saveRows()">スプレッドシートに保存</button>
+      <button class="save" onclick="saveRows()">登録する</button>
       <div id="saveStatus" class="status"></div>
     </div>
   </div>
 
-  <!-- 追加用モーダル -->
+  <!-- モーダル群 -->
   <div id="addModal" class="modal-overlay">
     <div class="modal-content">
       <h3 id="addModalTitle">追加</h3>
@@ -203,8 +183,6 @@
       </div>
     </div>
   </div>
-
-  <!-- 削除用モーダル -->
   <div id="deleteModal" class="modal-overlay">
     <div class="modal-content">
       <h3 id="deleteModalTitle">削除</h3>
@@ -225,14 +203,16 @@
     let listData = { measurers: [], tanks: [] };
     let currentModalTarget = '';
 
-    // --- 音声入力システム管理変数 ---
+    // ==========================================
+    // 音声バッファシステム用変数
+    // ==========================================
     let recognition = null;
     let isListening = false;
     let rows = [];
     let silenceTimer = null;
-    let processedIndex = 0;
-    let currentResultsLength = 0;
-    let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
+    
+    let previousSessionsText = ''; 
+    let consumedLength = 0; 
 
     window.onload = () => {
       document.getElementById('measurementDate').valueAsDate = new Date();
@@ -240,35 +220,22 @@
       setupSpeechRecognition();
     };
 
-    // --- リスト管理（スプレッドシート連携） ---
+    // ==========================================
+    // リスト管理
+    // ==========================================
     async function loadLists() {
       try {
-        const response = await fetch(GAS_WEB_APP_URL + '?action=getLists');
+        const payload = { action: 'getOptions' };
+        const response = await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify(payload) });
         const data = await response.json();
-        listData.measurers = data.measurers || [];
-        listData.tanks = data.tanks || [];
-        populateSelect('measurer', listData.measurers);
-        populateSelect('tankName', listData.tanks);
+        if (data.ok) {
+          listData.measurers = data.measurers || [];
+          listData.tanks = data.tanks || [];
+          populateSelect('measurer', listData.measurers);
+          populateSelect('tankName', listData.tanks);
+        }
       } catch (error) {
-        setStatus('スプレッドシートからのリスト取得に失敗しました。', 'error');
-      }
-    }
-
-    async function saveLists() {
-      try {
-        const payload = {
-          action: 'updateLists',
-          measurers: listData.measurers,
-          tanks: listData.tanks
-        };
-        await fetch(GAS_WEB_APP_URL, {
-          method: 'POST', 
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
-          body: JSON.stringify(payload)
-        });
-        loadLists();
-      } catch (error) {
-        setStatus('リストの更新に失敗しました。', 'error');
+        setStatus('リストの取得に失敗しました。', 'error');
       }
     }
 
@@ -284,22 +251,21 @@
       if (items.includes(currentVal)) select.value = currentVal;
     }
 
-    // --- モーダル操作 ---
     function showAddModal(target) {
       currentModalTarget = target;
       document.getElementById('addModalTitle').textContent = target === 'measurer' ? '測定者の追加' : '水槽の追加';
       document.getElementById('addModalInput').value = '';
       document.getElementById('addModal').classList.add('active');
     }
-    function confirmAddModal() {
+    async function confirmAddModal() {
       const val = document.getElementById('addModalInput').value.trim();
       if (!val) return;
-      const targetArr = currentModalTarget === 'measurer' ? listData.measurers : listData.tanks;
-      if (!targetArr.includes(val)) {
-        targetArr.push(val);
-        saveLists();
-      }
       closeModal('addModal');
+      const gasType = currentModalTarget === 'measurer' ? 'measurer' : 'tank';
+      try {
+        await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'addOption', type: gasType, value: val }) });
+        loadLists();
+      } catch (e) { setStatus('項目の追加に失敗しました。', 'error'); }
     }
     function showDeleteModal(target) {
       currentModalTarget = target;
@@ -314,22 +280,21 @@
       });
       document.getElementById('deleteModal').classList.add('active');
     }
-    function confirmDeleteModal() {
+    async function confirmDeleteModal() {
       const val = document.getElementById('deleteModalSelect').value;
       if (!val) return;
-      if (currentModalTarget === 'measurer') {
-        listData.measurers = listData.measurers.filter(i => i !== val);
-      } else {
-        listData.tanks = listData.tanks.filter(i => i !== val);
-      }
-      saveLists();
       closeModal('deleteModal');
+      const gasType = currentModalTarget === 'measurer' ? 'measurer' : 'tank';
+      try {
+        await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'deleteOption', type: gasType, value: val }) });
+        loadLists();
+      } catch (e) { setStatus('項目の削除に失敗しました。', 'error'); }
     }
-    function closeModal(id) {
-      document.getElementById(id).classList.remove('active');
-    }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-    // --- リアルタイムマイク（連続読上げ・聞き逃し防止仕様） ---
+    // ==========================================
+    // 音声認識（バッファ＆文字列引き算システム）
+    // ==========================================
     function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return setStatus('このブラウザは音声入力非対応です。', 'error');
@@ -340,39 +305,63 @@
       recognition.interimResults = true;
 
       recognition.onstart = () => {
-        processedIndex = 0;
-        currentResultsLength = 0;
+        consumedLength = 0; 
         setStatus('マイク聞き取り中...', 'listening');
       };
 
       recognition.onresult = (event) => {
-        currentResultsLength = event.results.length;
-        let currentText = '';
-        
-        for (let i = processedIndex; i < event.results.length; i++) {
-          currentText += event.results[i][0].transcript;
+        let currentSessionStr = '';
+        for (let i = 0; i < event.results.length; i++) {
+          currentSessionStr += event.results[i][0].transcript;
         }
-        
-        if (currentText.match(/次|つぎ/)) {
-          currentText = currentText.replace(/次|つぎ/g, ' ').trim();
-          document.getElementById('latestText').value = currentText;
-          clearTimeout(silenceTimer);
-          processTextToTable(false); 
-          return; 
+
+        let activeSessionStr = currentSessionStr.substring(consumedLength);
+        let visibleText = previousSessionsText + activeSessionStr;
+
+        while (visibleText.match(/次|つぎ/)) {
+          let match = visibleText.match(/次|つぎ/);
+          let targetText = visibleText.substring(0, match.index); 
+          
+          if (targetText.trim()) {
+            processTextToTable(targetText); 
+          }
+
+          let totalConsumedThisTime = match.index + match[0].length;
+          
+          if (totalConsumedThisTime >= previousSessionsText.length) {
+            consumedLength += (totalConsumedThisTime - previousSessionsText.length);
+            previousSessionsText = '';
+          } else {
+            previousSessionsText = previousSessionsText.substring(totalConsumedThisTime);
+          }
+          
+          activeSessionStr = currentSessionStr.substring(consumedLength);
+          visibleText = previousSessionsText + activeSessionStr;
         }
-        
-        document.getElementById('latestText').value = currentText.trim();
-        
+
+        document.getElementById('latestText').value = visibleText;
+
         clearTimeout(silenceTimer);
         silenceTimer = setTimeout(() => {
-          if (document.getElementById('latestText').value.trim()) processTextToTable(true);
-        }, 2500); 
+          let finalTarget = document.getElementById('latestText').value.trim();
+          if (finalTarget) {
+            processTextToTable(finalTarget);
+            previousSessionsText = '';
+            consumedLength = currentSessionStr.length;
+            document.getElementById('latestText').value = '';
+          }
+        }, 3000);
       };
 
       recognition.onerror = (e) => { 
         if (e.error !== 'no-speech') setStatus(`音声認識エラー: ${e.error}`, 'error'); 
       };
+
       recognition.onend = () => {
+        let leftover = document.getElementById('latestText').value.trim();
+        if (leftover) previousSessionsText = leftover + ' ';
+        else previousSessionsText = '';
+        
         if (isListening) try { recognition.start(); } catch (e) {}
         else setStatus('マイク停止中', '');
       };
@@ -385,6 +374,7 @@
       document.getElementById('stopBtn').style.display = start ? 'block' : 'none';
       if (start) {
         document.getElementById('latestText').value = '';
+        previousSessionsText = '';
         recognition.start();
       } else {
         recognition.stop();
@@ -397,28 +387,29 @@
       el.className = 'status ' + type;
     }
 
-    function processTextToTable(isAuto = false) {
-      const text = document.getElementById('latestText').value.trim();
-      if (!text) return false;
-      
+    // ==========================================
+    // データ反映・テキスト解析
+    // ==========================================
+    function processTextToTable(text) {
+      if (!text.trim()) return;
       const parsedRows = parseSpeechText(text);
       if (parsedRows.length > 0) {
         rows.push(...parsedRows);
         renderTable();
-        setStatus(`${parsedRows.length} 件を表に追加しました。（未入力部分は赤くなります）`, 'ok');
-        
-        document.getElementById('latestText').value = '';
-        // マイクは止めず、読み取り位置だけ更新する
-        processedIndex = currentResultsLength;
-        return true;
+        setStatus(`${parsedRows.length} 件を表に追加しました。（未入力は赤）`, 'ok');
       } else {
-        if (!isAuto) setStatus('データ（体長・体重など）を読み取れませんでした。', 'error');
-        else setStatus('入力中...（続きを話してください）', 'processing');
-        return false;
+        setStatus('データ（体長・体重など）を読み取れませんでした。', 'error');
       }
     }
 
-    // --- テキスト解析・正規化 ---
+    function manualProcess() {
+      const text = document.getElementById('latestText').value;
+      processTextToTable(text);
+      previousSessionsText = '';
+      consumedLength += text.length; 
+      document.getElementById('latestText').value = '';
+    }
+
     function normalizeText(text) {
       let str = String(text || '');
       const kansujiMap = {'一':'1','二':'2','三':'3','四':'4','五':'5','六':'6','七':'7','八':'8','九':'9'};
@@ -454,7 +445,6 @@
       const weightMatch = chunk.match(/([0-9]+(?:\.[0-9]+)?)\s*g/i);
       let deformity = findDeformityLevel(chunk);
       
-      // どれか1つでもあれば表に追加（欠損を許容）
       if (!lengthMatch && !weightMatch && deformity === 'なし') return null;
       
       const lengthCm = lengthMatch ? Number(lengthMatch[1]) : '';
@@ -470,10 +460,8 @@
 
     function parseSpeechText(text) {
       const normalized = normalizeText(text);
-      // 「〇番」または「〇cm」の直前で文章を区切る（連続入力対応）
-      const chunks = normalized.split(/(?=(?:\d+\s*(?:番|ばん|ナンバー|no|No|NO))|\d+(?:\.\d+)?\s*cm)/i);
+      const chunks = normalized.split(/(?=\d+\s*(?:番|ばん|ナンバー|no|No|NO))/i);
       const results = [];
-      
       chunks.forEach(chunk => {
         if (!chunk.trim()) return;
         const parsed = parseOneChunk(chunk);
@@ -488,7 +476,9 @@
       return nums.length > 0 ? Math.max(...nums) : 0;
     }
 
-    // --- テーブル操作 ＆ エラー判定 ---
+    // ==========================================
+    // テーブル操作・保存
+    // ==========================================
     function isValidRow(row) {
       return String(row.number || '').trim() !== '' && 
              row.lengthCm !== '' && isFinite(Number(row.lengthCm)) && Number(row.lengthCm) > 0 && 
@@ -524,20 +514,10 @@
       });
     }
 
-    function updateRow(index, field, value) {
-      rows[index][field] = value;
-      renderTable();
-    }
-    function deleteRow(index) {
-      rows.splice(index, 1);
-      renderTable();
-    }
-    function addRow() {
-      rows.push({ number: String(getLastNumberInRows() + 1), lengthCm: '', weightG: '', deformity: 'なし' });
-      renderTable();
-    }
+    function updateRow(index, field, value) { rows[index][field] = value; renderTable(); }
+    function deleteRow(index) { rows.splice(index, 1); renderTable(); }
+    function addRow() { rows.push({ number: String(getLastNumberInRows() + 1), lengthCm: '', weightG: '', deformity: 'なし' }); renderTable(); }
 
-    // --- スプレッドシートへ保存 ---
     async function saveRows() {
       const measurementDate = document.getElementById('measurementDate').value;
       const measurer = document.getElementById('measurer').value;
@@ -547,7 +527,6 @@
         setSaveStatus('必須項目（測定日・測定者・水槽）を選択してください。', 'error');
         return;
       }
-      
       if (rows.some(row => !isValidRow(row))) {
         setSaveStatus('未入力やエラーの行（赤色）があります。数値を手入力するか、削除してください。', 'error');
         return;
@@ -560,69 +539,17 @@
         }))
       };
 
-      setSaveStatus('スプレッドシートへ保存中...', '');
+      setSaveStatus('登録中...', '');
       try {
-        const response = await fetch(GAS_WEB_APP_URL, {
-          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload)
-        });
+        const response = await fetch(GAS_WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
         const resData = JSON.parse(await response.text());
         if (resData.ok) {
-          setSaveStatus(`${resData.count}件のデータをスプレッドシートに登録しました！`, 'ok');
+          setSaveStatus(`${resData.count}件のデータを登録完了しました！`, 'ok');
           rows = []; renderTable(); document.getElementById('latestText').value = '';
         } else {
-          setSaveStatus(`保存エラー: ${resData.error}`, 'error');
+          setSaveStatus(`登録エラー: ${resData.error}`, 'error');
         }
-      } catch (e) {
-        setSaveStatus(`通信エラー: ${e.message}`, 'error');
-      }
-    }
-
-    function setSaveStatus(msg, type) {
-      const el = document.getElementById('saveStatus');
-      el.textContent = msg;
-      el.className = 'status ' + type;
-    }
-
-    // --- マイク音量テスト ---
-    async function testVolume() {
-      if (micStream) return;
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        const source = audioCtx.createMediaStreamSource(micStream);
-        source.connect(analyser);
-        analyser.fftSize = 256;
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        document.getElementById('micMeter').style.display = 'block';
-        
-        const updateMeter = () => {
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-          const avg = sum / dataArray.length;
-          const percent = Math.min(100, Math.round((avg / 128) * 100));
-          
-          const bar = document.getElementById('volumeBar');
-          bar.style.width = percent + '%';
-          bar.style.backgroundColor = percent > 50 ? '#188038' : '#aaaaaa';
-          document.getElementById('volumeText').textContent = percent + '%';
-          
-          animFrameId = requestAnimationFrame(updateMeter);
-        };
-        updateMeter();
-        
-        setTimeout(() => {
-          cancelAnimationFrame(animFrameId);
-          micStream.getTracks().forEach(track => track.stop());
-          micStream = null;
-          if (audioCtx) { audioCtx.close(); audioCtx = null; }
-          document.getElementById('micMeter').style.display = 'none';
-        }, 5000);
-      } catch (e) {
-        alert('マイクにアクセスできませんでした。');
-      }
+      } catch (e) { setSaveStatus(`通信エラー: ${e.message}`, 'error'); }
     }
   </script>
 </body>
