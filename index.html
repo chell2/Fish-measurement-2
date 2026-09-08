@@ -467,9 +467,14 @@
 
     function parseSpeechText(text) {
       const normalized = normalizeText(text);
-      // 「〇番」または「数値cm」の直前で文章を区切る
-      const chunks = normalized.split(/(?=(?:\d+\s*(?:番|ばん|ナンバー|no|No|NO))|\d+(?:\.\d+)?\s*cm)/i);
+      
+      // 「〇番」または「数値cm」の塊を確実に見つけ、その直前に目印「|||」をつける
+      const markedText = normalized.replace(/(\d+\s*(?:番|ばん|ナンバー|no|No|NO)|\d+(?:\.\d+)?\s*cm)/gi, '|||$1');
+      
+      // 目印「|||」を基準に文章を切り分ける
+      const chunks = markedText.split('|||');
       const results = [];
+      
       chunks.forEach(chunk => {
         if (!chunk.trim()) return;
         const parsed = parseOneChunk(chunk);
