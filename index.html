@@ -218,16 +218,21 @@
 
   <script>
     // ==========================================
-    // 1. 設定用定数
+    // 設定用定数
     // ==========================================
     const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxp2lcJyDW3NLUnxXGpIB9T7k1S-DnC1xi23yzWJPiFiw4VSmhQjWAjibba1Iqg0o0gBg/exec';
 
-    // ==========================================
-    // 2. アプリのメイン処理
-    // ==========================================
-
     let listData = { measurers: [], tanks: [] };
     let currentModalTarget = '';
+
+    // --- 音声入力システム管理変数 ---
+    let recognition = null;
+    let isListening = false;
+    let rows = [];
+    let silenceTimer = null;
+    let processedIndex = 0;
+    let currentResultsLength = 0;
+    let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
 
     window.onload = () => {
       document.getElementById('measurementDate').valueAsDate = new Date();
@@ -235,17 +240,38 @@
       setupSpeechRecognition();
     };
 
-    // --- リスト管理（ローカルストレージ） ---
-    function loadLists() {
-      const saved = localStorage.getItem('fishAppLists');
-      if (saved) listData = JSON.parse(saved);
-      populateSelect('measurer', listData.measurers);
-      populateSelect('tankName', listData.tanks);
+    // --- リスト管理（スプレッドシート連携） ---
+    async function loadLists() {
+      try {
+        const response = await fetch(GAS_WEB_APP_URL + '?action=getLists');
+        const data = await response.json();
+        listData.measurers = data.measurers || [];
+        listData.tanks = data.tanks || [];
+        populateSelect('measurer', listData.measurers);
+        populateSelect('tankName', listData.tanks);
+      } catch (error) {
+        setStatus('スプレッドシートからのリスト取得に失敗しました。', 'error');
+      }
     }
-    function saveLists() {
-      localStorage.setItem('fishAppLists', JSON.stringify(listData));
-      loadLists();
+
+    async function saveLists() {
+      try {
+        const payload = {
+          action: 'updateLists',
+          measurers: listData.measurers,
+          tanks: listData.tanks
+        };
+        await fetch(GAS_WEB_APP_URL, {
+          method: 'POST', 
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+          body: JSON.stringify(payload)
+        });
+        loadLists();
+      } catch (error) {
+        setStatus('リストの更新に失敗しました。', 'error');
+      }
     }
+
     function populateSelect(id, items) {
       const select = document.getElementById(id);
       const currentVal = select.value;
@@ -303,16 +329,7 @@
       document.getElementById(id).classList.remove('active');
     }
 
-    // --- 音声入力 ＆ 解析システム ---
-    let recognition = null;
-    let isListening = false;
-    let rows = [];
-    let silenceTimer = null;
-    let textBeforeSession = '';
-    
-    // 音量テスト関連
-    let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
-
+    // --- リアルタイムマイク（連続読上げ・聞き逃し防止仕様） ---
     function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return setStatus('このブラウザは音声入力非対応です。', 'error');
@@ -323,39 +340,33 @@
       recognition.interimResults = true;
 
       recognition.onstart = () => {
-        textBeforeSession = document.getElementById('latestText').value.trim();
+        processedIndex = 0;
+        currentResultsLength = 0;
         setStatus('マイク聞き取り中...', 'listening');
       };
 
       recognition.onresult = (event) => {
-        let currentSessionFinal = '';
-        let interim = '';
+        currentResultsLength = event.results.length;
+        let currentText = '';
         
-        for (let i = 0; i < event.results.length; i++) {
-          if (event.results[i].isFinal) currentSessionFinal += event.results[i][0].transcript + ' ';
-          else interim += event.results[i][0].transcript;
+        for (let i = processedIndex; i < event.results.length; i++) {
+          currentText += event.results[i][0].transcript;
         }
         
-        let newText = textBeforeSession;
-        if (newText && (currentSessionFinal || interim)) newText += ' ';
-        newText += currentSessionFinal + interim;
-        
-        // 「次」キーワードで即時反映
-        if (newText.match(/次|つぎ/)) {
-          newText = newText.replace(/次|つぎ/g, ' ').trim();
-          document.getElementById('latestText').value = newText;
+        if (currentText.match(/次|つぎ/)) {
+          currentText = currentText.replace(/次|つぎ/g, ' ').trim();
+          document.getElementById('latestText').value = currentText;
           clearTimeout(silenceTimer);
           processTextToTable(false); 
           return; 
         }
         
-        document.getElementById('latestText').value = newText.trim();
+        document.getElementById('latestText').value = currentText.trim();
         
         clearTimeout(silenceTimer);
-        // 無言が3秒続いたら自動処理（データが欠けていても表に出す）
         silenceTimer = setTimeout(() => {
           if (document.getElementById('latestText').value.trim()) processTextToTable(true);
-        }, 3000); 
+        }, 2500); 
       };
 
       recognition.onerror = (e) => { 
@@ -374,7 +385,6 @@
       document.getElementById('stopBtn').style.display = start ? 'block' : 'none';
       if (start) {
         document.getElementById('latestText').value = '';
-        textBeforeSession = '';
         recognition.start();
       } else {
         recognition.stop();
@@ -389,7 +399,7 @@
 
     function processTextToTable(isAuto = false) {
       const text = document.getElementById('latestText').value.trim();
-      if (!text) return;
+      if (!text) return false;
       
       const parsedRows = parseSpeechText(text);
       if (parsedRows.length > 0) {
@@ -398,11 +408,13 @@
         setStatus(`${parsedRows.length} 件を表に追加しました。（未入力部分は赤くなります）`, 'ok');
         
         document.getElementById('latestText').value = '';
-        textBeforeSession = '';
-        if (isListening && recognition) recognition.stop(); // マイクの記憶をリセット
+        // マイクは止めず、読み取り位置だけ更新する
+        processedIndex = currentResultsLength;
+        return true;
       } else {
         if (!isAuto) setStatus('データ（体長・体重など）を読み取れませんでした。', 'error');
         else setStatus('入力中...（続きを話してください）', 'processing');
+        return false;
       }
     }
 
@@ -458,8 +470,10 @@
 
     function parseSpeechText(text) {
       const normalized = normalizeText(text);
-      const chunks = normalized.split(/(?=\d+\s*(?:番|ばん|ナンバー|no|No|NO))/i);
+      // 「〇番」または「〇cm」の直前で文章を区切る（連続入力対応）
+      const chunks = normalized.split(/(?=(?:\d+\s*(?:番|ばん|ナンバー|no|No|NO))|\d+(?:\.\d+)?\s*cm)/i);
       const results = [];
+      
       chunks.forEach(chunk => {
         if (!chunk.trim()) return;
         const parsed = parseOneChunk(chunk);
@@ -490,7 +504,6 @@
       }
       rows.forEach((row, index) => {
         const tr = document.createElement('tr');
-        // エラー行は背景を赤くする
         if (!isValidRow(row)) tr.className = 'invalid-row';
 
         tr.innerHTML = `
@@ -513,7 +526,7 @@
 
     function updateRow(index, field, value) {
       rows[index][field] = value;
-      renderTable(); // 修正したら赤色判定を更新
+      renderTable();
     }
     function deleteRow(index) {
       rows.splice(index, 1);
@@ -535,7 +548,6 @@
         return;
       }
       
-      // 赤いエラー行があれば保存ブロック
       if (rows.some(row => !isValidRow(row))) {
         setSaveStatus('未入力やエラーの行（赤色）があります。数値を手入力するか、削除してください。', 'error');
         return;
