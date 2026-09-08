@@ -230,7 +230,13 @@
     let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
 
     window.onload = () => {
-      document.getElementById('measurementDate').valueAsDate = new Date();
+      // 日本時間のローカル年月日（YYYY-MM-DD）をセット
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
+
       loadLists();
       setupSpeechRecognition();
     };
