@@ -264,7 +264,7 @@
       if (!val) return;
       closeModal('addModal');
       const gasType = currentModalTarget === 'measurer' ? 'measurer' : 'tank';
-      const label = currentModalTarget === 'measurer' ? '担当者' : '水槽';
+      const label = currentModalTarget === 'measurer' ? '測定者' : '水槽';
       try {
         await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'addOption', type: gasType, value: val }) });
         loadLists();
@@ -291,7 +291,7 @@
       if (!val) return;
       closeModal('deleteModal');
       const gasType = currentModalTarget === 'measurer' ? 'measurer' : 'tank';
-      const label = currentModalTarget === 'measurer' ? '担当者' : '水槽';
+      const label = currentModalTarget === 'measurer' ? '測定者' : '水槽';
       try {
         await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'deleteOption', type: gasType, value: val }) });
         loadLists();
