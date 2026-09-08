@@ -327,6 +327,20 @@
         let activeSessionStr = currentSessionStr.substring(consumedLength);
         let visibleText = previousSessionsText + activeSessionStr;
 
+        // 「終了」「終わり」「停止」のキーワード検知・マイク停止処理
+        let stopMatch = visibleText.match(/終了|終わり|おわり|停止|ていし/);
+        if (stopMatch) {
+          let targetText = visibleText.substring(0, stopMatch.index);
+          if (targetText.trim()) {
+            processTextToTable(targetText);
+          }
+          document.getElementById('latestText').value = '';
+          previousSessionsText = '';
+          consumedLength = 0;
+          toggleMic(false); // マイク停止ボタンを押した時と同じ処理を呼び出す
+          return;
+        }
+        
         while (visibleText.match(/次|つぎ/)) {
           let match = visibleText.match(/次|つぎ/);
           let targetText = visibleText.substring(0, match.index); 
