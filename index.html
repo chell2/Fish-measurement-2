@@ -213,6 +213,7 @@
     
     let previousSessionsText = ''; 
     let consumedLength = 0; 
+    let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
 
     window.onload = () => {
       document.getElementById('measurementDate').valueAsDate = new Date();
@@ -235,7 +236,7 @@
           populateSelect('tankName', listData.tanks);
         }
       } catch (error) {
-        setStatus('リストの取得に失敗しました。', 'error'); // 文言シンプル化
+        setStatus('リストの取得に失敗しました。', 'error'); 
       }
     }
 
@@ -266,7 +267,6 @@
       try {
         await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'addOption', type: gasType, value: val }) });
         loadLists();
-        // ★ 追記：追加成功のメッセージを表示
         setStatus(`「${val}」を追加しました。`, 'ok');
       } catch (e) { setStatus('項目の追加に失敗しました。', 'error'); }
     }
@@ -467,7 +467,8 @@
 
     function parseSpeechText(text) {
       const normalized = normalizeText(text);
-      const chunks = normalized.split(/(?=\d+\s*(?:番|ばん|ナンバー|no|No|NO))/i);
+      // 「〇番」または「数値cm」の直前で文章を区切る
+      const chunks = normalized.split(/(?=(?:\d+\s*(?:番|ばん|ナンバー|no|No|NO))|\d+(?:\.\d+)?\s*cm)/i);
       const results = [];
       chunks.forEach(chunk => {
         if (!chunk.trim()) return;
@@ -559,6 +560,49 @@
       } catch (e) { setSaveStatus(`通信エラー: ${e.message}`, 'error'); }
     }
 
+    // --- マイク音量テスト ---
+    async function testVolume() {
+      if (micStream) return;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        const source = audioCtx.createMediaStreamSource(micStream);
+        source.connect(analyser);
+        analyser.fftSize = 256;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        document.getElementById('micMeter').style.display = 'block';
+        
+        const updateMeter = () => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          const avg = sum / dataArray.length;
+          const percent = Math.min(100, Math.round((avg / 128) * 100));
+          
+          const bar = document.getElementById('volumeBar');
+          bar.style.width = percent + '%';
+          bar.style.backgroundColor = percent > 50 ? '#188038' : '#aaaaaa';
+          document.getElementById('volumeText').textContent = percent + '%';
+          
+          animFrameId = requestAnimationFrame(updateMeter);
+        };
+        updateMeter();
+        
+        setTimeout(() => {
+          cancelAnimationFrame(animFrameId);
+          micStream.getTracks().forEach(track => track.stop());
+          micStream = null;
+          if (audioCtx) { audioCtx.close(); audioCtx = null; }
+          document.getElementById('micMeter').style.display = 'none';
+        }, 5000);
+      } catch (e) {
+        alert('マイクにアクセスできませんでした。');
+      }
+    }
+
+    // --- 保存ステータスメッセージ表示 ---
     function setSaveStatus(msg, type) {
       const el = document.getElementById('saveStatus');
       if (el) {
