@@ -230,12 +230,12 @@
     // ==========================================
     let recognition = null;
     let isListening = false;
+    let isStopping = false; // 「終了」検出後の二重発火防止フラグ
     let rows = [];
     let silenceTimer = null;
     
     let previousSessionsText = ''; 
     let consumedLength = 0; 
-    let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
 
     window.onload = () => {
       const now = new Date();
@@ -251,7 +251,6 @@
       setupSpeechRecognition();
     };
 
-    // 測定日から「〇年〇月分」を自動初期セット（20日以降なら翌月分、19日以前なら当月分）
     function syncTargetMonthFromDate() {
       const dateVal = document.getElementById('measurementDate').value;
       if (!dateVal) return;
@@ -360,7 +359,7 @@
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
     // ==========================================
-    // 音声認識（バッファ＆文字列引き算システム）
+    // 音声認識（バッファ＆二重登録防止システム）
     // ==========================================
     function setupSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -372,32 +371,27 @@
       recognition.interimResults = true;
 
       recognition.onstart = () => {
-        consumedLength = 0; 
+        consumedLength = 0;
+        isStopping = false;
         setStatus('マイク聞き取り中...', 'listening');
       };
 
       recognition.onresult = (event) => {
+        // 「終了」コマンド処理中または停止済みなら残余イベントを無視する
+        if (!isListening || isStopping) return;
+
         let currentSessionStr = '';
         for (let i = 0; i < event.results.length; i++) {
           currentSessionStr += event.results[i][0].transcript;
         }
 
+        // すでに処理済みの文字数より短い場合は無視
+        if (currentSessionStr.length <= consumedLength && !previousSessionsText) return;
+
         let activeSessionStr = currentSessionStr.substring(consumedLength);
         let visibleText = previousSessionsText + activeSessionStr;
 
-        let stopMatch = visibleText.match(/終了|終わり|おわり|停止|ていし/);
-        if (stopMatch) {
-          let targetText = visibleText.substring(0, stopMatch.index);
-          if (targetText.trim()) {
-            processTextToTable(targetText);
-          }
-          document.getElementById('latestText').value = '';
-          previousSessionsText = '';
-          consumedLength = 0;
-          toggleMic(false);
-          return;
-        }
-        
+        // 1. まず「次」をすべて処理して消費済みにする
         while (visibleText.match(/次|つぎ/)) {
           let match = visibleText.match(/次|つぎ/);
           let targetText = visibleText.substring(0, match.index); 
@@ -419,10 +413,30 @@
           visibleText = previousSessionsText + activeSessionStr;
         }
 
+        // 2. 「終了」が発声された場合、未処理の直前部分だけ1回反映して即座に完全停止
+        let stopMatch = visibleText.match(/終了|終わり|おわり|停止|ていし/);
+        if (stopMatch) {
+          isStopping = true;
+          clearTimeout(silenceTimer);
+
+          let targetText = visibleText.substring(0, stopMatch.index);
+          if (targetText.trim()) {
+            processTextToTable(targetText);
+          }
+
+          // バッファとテキスト欄を完全に空にしてからマイクを停止
+          consumedLength = currentSessionStr.length;
+          previousSessionsText = '';
+          document.getElementById('latestText').value = '';
+          toggleMic(false);
+          return;
+        }
+
         document.getElementById('latestText').value = visibleText;
 
         clearTimeout(silenceTimer);
         silenceTimer = setTimeout(() => {
+          if (!isListening || isStopping) return;
           let finalTarget = document.getElementById('latestText').value.trim();
           if (finalTarget) {
             processTextToTable(finalTarget);
@@ -434,30 +448,45 @@
       };
 
       recognition.onerror = (e) => { 
-        if (e.error !== 'no-speech') setStatus(`音声認識エラー: ${e.error}`, 'error'); 
+        if (e.error !== 'no-speech' && !isStopping) {
+          setStatus(`音声認識エラー: ${e.error}`, 'error'); 
+        }
       };
 
       recognition.onend = () => {
+        if (isStopping || !isListening) {
+          previousSessionsText = '';
+          document.getElementById('latestText').value = '';
+          setStatus('マイク停止中', '');
+          return;
+        }
+
         let leftover = document.getElementById('latestText').value.trim();
         if (leftover) previousSessionsText = leftover + ' ';
         else previousSessionsText = '';
         
-        if (isListening) try { recognition.start(); } catch (e) {}
-        else setStatus('マイク停止中', '');
+        try { recognition.start(); } catch (e) {}
       };
     }
 
     function toggleMic(start) {
       if (!recognition) return;
+      clearTimeout(silenceTimer);
       isListening = start;
       document.getElementById('startBtn').style.display = start ? 'none' : 'block';
       document.getElementById('stopBtn').style.display = start ? 'block' : 'none';
       if (start) {
+        isStopping = false;
         document.getElementById('latestText').value = '';
         previousSessionsText = '';
+        consumedLength = 0;
         recognition.start();
       } else {
-        recognition.stop();
+        isStopping = true;
+        previousSessionsText = '';
+        document.getElementById('latestText').value = '';
+        try { recognition.stop(); } catch (e) {}
+        setStatus('マイク停止中', '');
       }
     }
 
