@@ -25,15 +25,17 @@
     input, select { height: 44px; padding: 0 12px; }
     textarea { height: auto; min-height: 90px; padding: 10px 12px; resize: vertical; }
 
-    input[type="date"] {
+    input[type="date"], input[type="month"] {
       -webkit-appearance: none; appearance: none; display: block; height: 44px;
     }
     input[type="date"]::-webkit-datetime-edit,
-    input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+    input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+    input[type="month"]::-webkit-datetime-edit,
+    input[type="month"]::-webkit-datetime-edit-fields-wrapper {
       display: flex; align-items: center; height: 100%; line-height: normal;
     }
 
-    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .grid > div { min-width: 0; }
     
     .input-group { display: flex; width: 100%; }
@@ -70,6 +72,7 @@
     .error { color: #d93025; }
     
     .hint { font-size: 14px; color: #555; line-height: 1.7; }
+    .sub-hint { font-size: 12px; color: #666; margin-top: 4px; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; min-width: 640px; }
     th, td { border-bottom: 1px solid #e6e9f0; padding: 8px; text-align: left; vertical-align: middle; }
@@ -123,7 +126,12 @@
     <div class="card grid">
       <div>
         <label>測定日</label>
-        <input type="date" id="measurementDate">
+        <input type="date" id="measurementDate" onchange="syncTargetMonthFromDate()">
+      </div>
+      <div>
+        <label>測定対象月（〇年〇月分）</label>
+        <input type="month" id="targetMonthInput">
+        <div class="sub-hint" id="targetMonthPreview"></div>
       </div>
       <div>
         <label>測定者</label>
@@ -145,11 +153,11 @@
 
     <div class="card">
       <label>音声入力</label>
-            <p class="hint">話し方の例：
-              「13センチ 36グラム 形態異常C、<b>次</b>」<br>
-              「15センチ 20グラム 形態異常A、9センチ 8グラム、<b>終了</b>」<br>
-              ※「<b>次</b>」と言うと即座に表に反映され、「<b>終了</b>」と言うとマイクが停止します
-            </p>
+      <p class="hint">話し方の例：
+        「13センチ 36グラム 形態異常C、<b>次</b>」<br>
+        「13センチ 36グラム 形態異常C、9センチ 8グラム、<b>終了</b>」<br>
+        ※「<b>次</b>」と言うと即座に表に反映され、「<b>終了</b>」と言うとマイクが停止します
+      </p>
       
       <div class="buttons">
         <button class="primary" id="startBtn" onclick="toggleMic(true)">マイク開始</button>
@@ -212,7 +220,7 @@
     // ==========================================
     // 設定用定数
     // ==========================================
-    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxp2lcJyDW3NLUnxXGpIB9T7k1S-DnC1xi23yzWJPiFiw4VSmhQjWAjibba1Iqg0o0gBg/exec';
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwnIuSHGbXTjvYYMOFXU8ycOyvVCgeCZ9k7SDQu3k7Dt5DWd5Wi26nJC1K5j9eZPy8XoA/exec';
 
     let listData = { measurers: [], tanks: [] };
     let currentModalTarget = '';
@@ -230,16 +238,46 @@
     let audioCtx = null, analyser = null, micStream = null, animFrameId = null;
 
     window.onload = () => {
-      // 日本時間のローカル年月日（YYYY-MM-DD）をセット
       const now = new Date();
       const yyyy = now.getFullYear();
       const mm = String(now.getMonth() + 1).padStart(2, '0');
       const dd = String(now.getDate()).padStart(2, '0');
       document.getElementById('measurementDate').value = `${yyyy}-${mm}-${dd}`;
+      syncTargetMonthFromDate();
+
+      document.getElementById('targetMonthInput').addEventListener('change', updateTargetMonthPreview);
 
       loadLists();
       setupSpeechRecognition();
     };
+
+    // 測定日から「〇年〇月分」を自動初期セット（20日以降なら翌月分、19日以前なら当月分）
+    function syncTargetMonthFromDate() {
+      const dateVal = document.getElementById('measurementDate').value;
+      if (!dateVal) return;
+      const p = dateVal.split('-');
+      let y = Number(p[0]);
+      let m = Number(p[1]);
+      const d = Number(p[2]);
+      if (d >= 20) {
+        m += 1;
+        if (m > 12) { m = 1; y += 1; }
+      }
+      document.getElementById('targetMonthInput').value = `${y}-${String(m).padStart(2, '0')}`;
+      updateTargetMonthPreview();
+    }
+
+    function getFormattedTargetMonth() {
+      const val = document.getElementById('targetMonthInput').value;
+      if (!val) return '';
+      const p = val.split('-');
+      return `${Number(p[0])}年${Number(p[1])}月分`;
+    }
+
+    function updateTargetMonthPreview() {
+      const label = getFormattedTargetMonth();
+      document.getElementById('targetMonthPreview').textContent = label ? `記録ラベル：${label}` : '';
+    }
 
     // ==========================================
     // リスト管理
@@ -347,7 +385,6 @@
         let activeSessionStr = currentSessionStr.substring(consumedLength);
         let visibleText = previousSessionsText + activeSessionStr;
 
-        // 「終了」「終わり」「停止」のキーワード検知・マイク停止処理
         let stopMatch = visibleText.match(/終了|終わり|おわり|停止|ていし/);
         if (stopMatch) {
           let targetText = visibleText.substring(0, stopMatch.index);
@@ -357,7 +394,7 @@
           document.getElementById('latestText').value = '';
           previousSessionsText = '';
           consumedLength = 0;
-          toggleMic(false); // マイク停止ボタンを押した時と同じ処理を呼び出す
+          toggleMic(false);
           return;
         }
         
@@ -503,11 +540,7 @@
 
     function parseSpeechText(text) {
       const normalized = normalizeText(text);
-      
-      // 「〇番」または「数値cm」の塊を確実に見つけ、その直前に目印「|||」をつける
       const markedText = normalized.replace(/(\d+\s*(?:番|ばん|ナンバー|no|No|NO)|\d+(?:\.\d+)?\s*cm)/gi, '|||$1');
-      
-      // 目印「|||」を基準に文章を切り分ける
       const chunks = markedText.split('|||');
       const results = [];
       
@@ -569,11 +602,12 @@
 
     async function saveRows() {
       const measurementDate = document.getElementById('measurementDate').value;
+      const targetMonth = getFormattedTargetMonth();
       const measurer = document.getElementById('measurer').value;
       const tankName = document.getElementById('tankName').value;
 
-      if (!measurementDate || !measurer || !tankName || rows.length === 0) {
-        setSaveStatus('必須項目（測定日・測定者・水槽）を選択してください。', 'error');
+      if (!measurementDate || !targetMonth || !measurer || !tankName || rows.length === 0) {
+        setSaveStatus('必須項目（測定日・測定対象月・測定者・水槽）を選択してください。', 'error');
         return;
       }
       if (rows.some(row => !isValidRow(row))) {
@@ -582,7 +616,7 @@
       }
 
       const payload = {
-        action: 'save', measurementDate, measurer, tankName,
+        action: 'save', measurementDate, targetMonth, measurer, tankName,
         rows: rows.map(r => ({
           number: String(r.number).trim(), lengthCm: Number(r.lengthCm), weightG: Number(r.weightG), deformity: String(r.deformity).trim()
         }))
@@ -593,7 +627,7 @@
         const response = await fetch(GAS_WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
         const resData = JSON.parse(await response.text());
         if (resData.ok) {
-          setSaveStatus(`${resData.count}件のデータを登録完了しました！`, 'ok'); 
+          setSaveStatus(`${resData.count}件のデータを登録完了しました！（${targetMonth}）`, 'ok'); 
           rows = []; renderTable(); document.getElementById('latestText').value = '';
         } else {
           setSaveStatus(`登録エラー: ${resData.error}`, 'error'); 
@@ -601,49 +635,6 @@
       } catch (e) { setSaveStatus(`通信エラー: ${e.message}`, 'error'); }
     }
 
-    // --- マイク音量テスト ---
-    async function testVolume() {
-      if (micStream) return;
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        const source = audioCtx.createMediaStreamSource(micStream);
-        source.connect(analyser);
-        analyser.fftSize = 256;
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        document.getElementById('micMeter').style.display = 'block';
-        
-        const updateMeter = () => {
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-          const avg = sum / dataArray.length;
-          const percent = Math.min(100, Math.round((avg / 128) * 100));
-          
-          const bar = document.getElementById('volumeBar');
-          bar.style.width = percent + '%';
-          bar.style.backgroundColor = percent > 50 ? '#188038' : '#aaaaaa';
-          document.getElementById('volumeText').textContent = percent + '%';
-          
-          animFrameId = requestAnimationFrame(updateMeter);
-        };
-        updateMeter();
-        
-        setTimeout(() => {
-          cancelAnimationFrame(animFrameId);
-          micStream.getTracks().forEach(track => track.stop());
-          micStream = null;
-          if (audioCtx) { audioCtx.close(); audioCtx = null; }
-          document.getElementById('micMeter').style.display = 'none';
-        }, 5000);
-      } catch (e) {
-        alert('マイクにアクセスできませんでした。');
-      }
-    }
-
-    // --- 保存ステータスメッセージ表示 ---
     function setSaveStatus(msg, type) {
       const el = document.getElementById('saveStatus');
       if (el) {
